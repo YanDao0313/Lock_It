@@ -8,8 +8,11 @@
 
 - **Automatic Screen Locking**: Locks screen based on weekly schedules with multiple time slots per day
 - **Password Protection**: Supports fixed 6-digit PIN or TOTP (Time-based One-Time Password) authentication
+- **TOTP QR Binding**: Supports QR-code binding with device label `LockIt - [Device Name]` and device-name locking after confirmation
 - **Customizable Lock Screen**: Configurable colors, text, themes, and time display options
 - **Security Camera**: Captures photos during unlock attempts for audit purposes
+- **Unlock Audit Details**: Unlock records include success/failure and unlock method (`fixed` or `totp`)
+- **Protected Record Cleanup**: Clearing unlock records requires password verification (fixed/TOTP follows global config)
 - **System Tray Integration**: Runs in background with tray icon and context menu
 - **Setup Wizard**: First-time user configuration with step-by-step guide
 
@@ -31,6 +34,7 @@ Project code and comments are primarily in **Chinese (简体中文)**.
 | Icons             | lucide-react   | ^0.564.0 |
 | State/Persistence | electron-store | ^11.0.2  |
 | TOTP Support      | otplib         | ^13.3.0  |
+| QR Code           | qrcode         | ^1.5.4   |
 | Date Formatting   | date-fns       | ^4.1.0   |
 
 ---
@@ -50,7 +54,7 @@ lock-it/
 │       └── src/
 │           ├── main.tsx          # Renderer entry (hash-based routing)
 │           ├── App.tsx           # Default demo component (unused)
-│           ├── Setup.tsx         # First-time setup wizard (5 steps)
+│           ├── Setup.tsx         # First-time setup wizard (includes optional TOTP binding)
 │           ├── Settings.tsx      # Configuration settings page
 │           ├── LockScreen.tsx    # Full-screen lock interface
 │           ├── components/       # Reusable components
@@ -88,6 +92,7 @@ The application follows Electron's multi-process architecture:
 
 3. **Renderer Process** (`src/renderer/src/`)
    - React-based UI with hash-based routing
+   - Listens to `hashchange` to re-render route pages in-place
    - Routes: `#setup` → `#settings` → `#lockscreen`
 
 ### Page Routing (Hash-based)
@@ -205,6 +210,7 @@ interface AppConfig {
     type: 'fixed' | 'totp' | 'both'
     fixedPassword?: string
     totpSecret?: string
+    totpDeviceName?: string
   }
   schedule: WeeklySchedule // 7 days with time slots
   style: StyleConfig // Colors, text, theme settings
@@ -215,7 +221,7 @@ interface AppConfig {
 
 Photos are saved to: `%appData%/lock-it/unlock-photos/`
 
-Records include timestamp, success/failure, and optional photo data.
+Records include timestamp, success/failure, unlock method (`fixed`/`totp`), and optional photo data.
 
 ---
 
@@ -287,6 +293,20 @@ Application enforces single instance via `app.requestSingleInstanceLock()`. Atte
 1. Check fixed password if configured
 2. Check TOTP token if configured
 3. Either can unlock if `type: 'both'`
+4. Lock screen verification returns unlock method for audit record persistence
+
+### TOTP Binding
+
+- Device name defaults to 4-char uppercase alphanumeric (e.g., `A1B2`)
+- User must confirm device name before QR generation
+- After confirmation/binding, device name is locked to prevent accidental changes
+- Existing TOTP secret is reused when regenerating QR in UI (no silent secret rotation)
+
+### Unlock Records UX
+
+- Records page supports manual refresh
+- Refresh actions are guarded against rapid repeated clicks (anti-double-click)
+- Clearing all records requires password verification in UI and is enforced again in main-process IPC
 
 ### Camera Integration
 

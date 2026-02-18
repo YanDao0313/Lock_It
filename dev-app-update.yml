@@ -1,3 +1,6 @@
-provider: generic
-url: https://example.com/auto-updates
+provider: github
+owner: YanDao0313
+repo: Lock_It
+releaseType: release
+private: false
 updaterCacheDirName: lock-it-updater

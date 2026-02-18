@@ -11,6 +11,7 @@ import {
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { format } from 'date-fns'
+import { autoUpdater } from 'electron-updater'
 
 // ============================================================================
 // 类型定义
@@ -724,6 +725,51 @@ function startScheduleChecker(): void {
   checkSchedule() // 立即检查一次
 }
 
+function setupAutoUpdater(): void {
+  if (is.dev) {
+    console.log('[updater] development mode, skip auto update check')
+    return
+  }
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[updater] checking for updates...')
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[updater] update available: ${info.version}`)
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[updater] no updates available')
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(
+      `[updater] downloading: ${progress.percent.toFixed(1)}% (${progress.transferred}/${progress.total})`
+    )
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[updater] update downloaded: ${info.version}, will install on quit`)
+  })
+
+  autoUpdater.on('error', (error) => {
+    console.error('[updater] error:', error)
+  })
+
+  void autoUpdater.checkForUpdates()
+
+  setInterval(
+    () => {
+      void autoUpdater.checkForUpdates()
+    },
+    6 * 60 * 60 * 1000
+  )
+}
+
 function verifyPasswordAgainstConfig(inputPassword: string): PasswordVerifyResult {
   const pwdConfig = normalizePasswordConfig(store.get('password') as PasswordConfig)
 
@@ -1096,6 +1142,7 @@ app
     })
 
     setupIpcHandlers()
+    setupAutoUpdater()
     createTray()
 
     const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
