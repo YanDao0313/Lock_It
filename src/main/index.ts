@@ -1,0 +1,872 @@
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  globalShortcut
+} from 'electron'
+import { join } from 'path'
+import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { format } from 'date-fns'
+
+// ============================================================================
+// 类型定义
+// ============================================================================
+interface TimeSlot {
+  start: string // "HH:mm"
+  end: string // "HH:mm"
+}
+
+interface DaySchedule {
+  enabled: boolean
+  slots: TimeSlot[]
+}
+
+interface WeeklySchedule {
+  monday: DaySchedule
+  tuesday: DaySchedule
+  wednesday: DaySchedule
+  thursday: DaySchedule
+  friday: DaySchedule
+  saturday: DaySchedule
+  sunday: DaySchedule
+}
+
+interface FontSizeConfig {
+  centerText: number
+  subText: number
+  bottomText: number
+  timeText: number
+}
+
+interface StyleConfig {
+  themeMode: 'light' | 'dark' | 'system' | 'custom'
+  themeName?: string
+  centerText: string
+  subText: string
+  bottomLeftText: string
+  bottomRightText: string
+  backgroundColor: string
+  textColor: string
+  lightBackgroundColor?: string
+  lightTextColor?: string
+  timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
+  timeFormat: string
+  closeScreenPrompt: string
+  fontSizes: FontSizeConfig
+}
+
+interface PasswordConfig {
+  type: 'fixed' | 'totp' | 'both'
+  fixedPassword?: string
+  totpSecret?: string
+}
+
+interface AppConfig {
+  hasCompletedSetup: boolean
+  password: PasswordConfig
+  schedule: WeeklySchedule
+  style: StyleConfig
+  selectedCamera?: string
+}
+
+interface UnlockRecord {
+  id: string
+  timestamp: number
+  success: boolean
+  attemptCount: number
+  photoData?: string
+  photoPath?: string
+  error?: string
+}
+
+// ============================================================================
+// 全局状态
+// ============================================================================
+let mainWindow: BrowserWindow | null = null
+let lockWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let store: any = null
+let totpModule: any = null
+let checkInterval: NodeJS.Timeout | null = null
+let isLocked = false
+let isQuitting = false
+let autoLockEnabled = true // 解锁后设为false，停止自动锁屏
+
+// 默认配置
+const defaultSchedule = (): WeeklySchedule => ({
+  monday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
+  tuesday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
+  wednesday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
+  thursday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
+  friday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
+  saturday: { enabled: false, slots: [] },
+  sunday: { enabled: false, slots: [] }
+})
+
+const defaultFontSizes = (): FontSizeConfig => ({
+  centerText: 48,
+  subText: 28,
+  bottomText: 16,
+  timeText: 20
+})
+
+const defaultStyle = (): StyleConfig => ({
+  themeMode: 'dark',
+  centerText: '此计算机因违规外联已被阻断',
+  subText: '请等待安全部门与你联系',
+  bottomLeftText: '保密委员会办公室',
+  bottomRightText: '',
+  backgroundColor: '#0066cc',
+  textColor: '#ffffff',
+  lightBackgroundColor: '#e0f2fe',
+  lightTextColor: '#1e3a5f',
+  timePosition: 'hidden',
+  timeFormat: 'HH:mm:ss',
+  closeScreenPrompt: '请关闭班级大屏后再继续操作',
+  fontSizes: defaultFontSizes()
+})
+
+// 获取实际使用的颜色（根据主题模式，提供默认值）
+function getThemeColors(style: StyleConfig) {
+  // 根据系统主题判断
+  const systemIsDark = nativeTheme?.shouldUseDarkColors ?? false
+
+  // 确定当前是深色模式还是浅色模式
+  let isDark: boolean
+  if (style.themeMode === 'system') {
+    isDark = systemIsDark
+  } else if (style.themeMode === 'dark') {
+    isDark = true
+  } else if (style.themeMode === 'light') {
+    isDark = false
+  } else {
+    // custom 模式下，根据用户选择或默认深色
+    isDark = true
+  }
+
+  // 返回对应的颜色配置
+  if (isDark) {
+    return {
+      backgroundColor: style.backgroundColor || '#0f172a',
+      textColor: style.textColor || '#ffffff'
+    }
+  } else {
+    return {
+      backgroundColor: style.lightBackgroundColor || style.backgroundColor || '#ffffff',
+      textColor: style.lightTextColor || style.textColor || '#1f2937'
+    }
+  }
+}
+
+// ============================================================================
+// ESM 模块加载
+// ============================================================================
+async function initModules(): Promise<void> {
+  const StoreModule = await import('electron-store')
+  store = new StoreModule.default({
+    name: 'config',
+    defaults: {
+      hasCompletedSetup: false,
+      password: { type: 'fixed', fixedPassword: '123456' },
+      schedule: defaultSchedule(),
+      style: defaultStyle()
+    }
+  })
+
+  const otplib = await import('otplib')
+  totpModule = otplib.TOTP
+}
+
+// ============================================================================
+// 窗口管理
+// ============================================================================
+function createMainWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.focus()
+    return mainWindow
+  }
+
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 850,
+    minWidth: 1000,
+    minHeight: 750,
+    show: false,
+    title: 'Lock It - 设置',
+    icon: join(__dirname, '../../resources/icon.png'),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  // 根据是否首次启动显示不同页面
+  const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
+  const pageHash = hasCompletedSetup ? 'settings' : 'setup'
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${pageHash}`)
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: pageHash })
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
+  return mainWindow
+}
+
+// 要阻止的系统快捷键列表
+const blockedShortcuts = [
+  'Alt+F4',
+  'Command+Q',
+  'Command+W',
+  'Command+Tab',
+  'Alt+Tab',
+  'Alt+Shift+Tab',
+  'Ctrl+Alt+Tab',
+  'Command+`',
+  'Super',
+  'Command+Space',
+  'Ctrl+Space',
+  'Alt+Space',
+  'Command+Option+Esc',
+  'Ctrl+Shift+Esc',
+  'Command+Shift+Esc',
+  'Ctrl+Alt+Delete',
+  'PrintScreen',
+  'Command+Shift+3',
+  'Command+Shift+4',
+  'Command+Shift+5'
+]
+
+function registerBlockingShortcuts(): void {
+  // 注册所有要阻止的快捷键，让它们什么都不做
+  for (const shortcut of blockedShortcuts) {
+    try {
+      globalShortcut.register(shortcut, () => {
+        console.log(`Blocked shortcut: ${shortcut}`)
+        // 什么都不做，只是阻止默认行为
+      })
+    } catch (e) {
+      // 某些快捷键可能无法注册，忽略错误
+    }
+  }
+
+  // 特别处理 Win 键（Windows/Linux）或 Command 键（macOS）
+  try {
+    // Windows 键
+    globalShortcut.register('Super', () => {
+      console.log('Blocked Super key')
+    })
+  } catch (e) {
+    // 忽略错误
+  }
+
+  // 单独注册 F 键和其他可能被用于系统功能的键
+  const functionKeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12']
+  for (const key of functionKeys) {
+    try {
+      // 阻止 Alt+F 组合
+      globalShortcut.register(`Alt+${key}`, () => {
+        console.log(`Blocked Alt+${key}`)
+      })
+    } catch (e) {
+      // 忽略错误
+    }
+  }
+}
+
+function unregisterBlockingShortcuts(): void {
+  globalShortcut.unregisterAll()
+}
+
+function createLockWindow(): BrowserWindow {
+  if (lockWindow && !lockWindow.isDestroyed()) {
+    lockWindow.focus()
+    return lockWindow
+  }
+
+  // 注册阻止快捷键
+  registerBlockingShortcuts()
+
+  lockWindow = new BrowserWindow({
+    fullscreen: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    frame: false,
+    kiosk: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    focusable: true,
+    backgroundColor: '#000000',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  // 阻止所有系统快捷键和窗口操作
+  lockWindow.setFullScreenable(false)
+  lockWindow.setSkipTaskbar(true)
+  lockWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+  lockWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  lockWindow.setContentProtection(true)
+
+  // 防止窗口失去焦点（通过定期重新获取焦点）
+  const focusInterval = setInterval(() => {
+    if (lockWindow && !lockWindow.isDestroyed()) {
+      if (!lockWindow.isFocused()) {
+        lockWindow.focus()
+      }
+      // 确保始终在最顶层
+      lockWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+    } else {
+      clearInterval(focusInterval)
+    }
+  }, 100)
+
+  // 阻止所有导航事件
+  lockWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault()
+  })
+
+  // 阻止新窗口打开
+  lockWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' }
+  })
+
+  // 防止卸载（阻止 Alt+F4）
+  lockWindow.webContents.on('before-input-event', (event, input) => {
+    // 阻止 Alt+F4
+    if (input.key === 'F4' && input.alt) {
+      event.preventDefault()
+    }
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    lockWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#lockscreen`)
+  } else {
+    lockWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'lockscreen' })
+  }
+
+  lockWindow.once('ready-to-show', () => {
+    lockWindow?.show()
+    lockWindow?.focus()
+    lockWindow?.setAlwaysOnTop(true, 'screen-saver', 1)
+    lockWindow?.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  })
+
+  // 当窗口关闭时清理
+  lockWindow.on('closed', () => {
+    clearInterval(focusInterval)
+    unregisterBlockingShortcuts()
+    lockWindow = null
+    isLocked = false
+  })
+
+  return lockWindow
+}
+
+function closeLockWindow(): void {
+  // 注销阻止的快捷键
+  unregisterBlockingShortcuts()
+
+  if (lockWindow && !lockWindow.isDestroyed()) {
+    lockWindow.closable = true
+    lockWindow.close()
+    lockWindow = null
+  }
+  isLocked = false
+  autoLockEnabled = false // 解锁后停止自动锁屏
+  updateTrayMenu()
+}
+
+// ============================================================================
+// 系统托盘
+// ============================================================================
+function createTray(): void {
+  if (tray) return
+
+  const iconPath = join(__dirname, '../../resources/icon.png')
+  tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }))
+  tray.setToolTip('Lock It - 自动锁屏')
+
+  updateTrayMenu()
+}
+
+function updateTrayMenu(): void {
+  if (!tray) return
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示设置',
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          createMainWindow()
+        } else {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: isLocked ? '🔒 已锁定' : '🔓 未锁定',
+      enabled: false
+    },
+    {
+      label: autoLockEnabled ? '✓ 自动锁屏已启用' : '✗ 自动锁屏已暂停',
+      enabled: false
+    },
+    { type: 'separator' },
+    ...(isLocked
+      ? []
+      : [
+          {
+            label: '立即锁定',
+            click: () => {
+              isLocked = true
+              createLockWindow()
+              updateTrayMenu()
+            }
+          }
+        ]),
+    ...(!isLocked && !autoLockEnabled
+      ? [
+          {
+            label: '恢复自动锁屏',
+            click: () => {
+              autoLockEnabled = true
+              updateTrayMenu()
+              checkSchedule() // 立即检查一次
+            }
+          }
+        ]
+      : []),
+    ...(isLocked
+      ? [
+          {
+            label: '解锁（需密码）',
+            click: () => {
+              //  bring lock window to front
+              if (lockWindow && !lockWindow.isDestroyed()) {
+                lockWindow.focus()
+                lockWindow.setAlwaysOnTop(true, 'screen-saver')
+              }
+            }
+          }
+        ]
+      : []),
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      }
+    }
+  ] as any)
+
+  tray?.setContextMenu(contextMenu)
+}
+
+// ============================================================================
+// 锁屏逻辑
+// ============================================================================
+function isInLockTime(): boolean {
+  const now = new Date()
+  const dayNames = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday'
+  ] as const
+  const todayKey = dayNames[now.getDay()]
+  const schedule = store.get('schedule') as WeeklySchedule
+  const todaySchedule = schedule[todayKey]
+
+  if (!todaySchedule?.enabled || todaySchedule.slots.length === 0) {
+    return false
+  }
+
+  const currentTime = format(now, 'HH:mm')
+
+  return todaySchedule.slots.some((slot) => {
+    return currentTime >= slot.start && currentTime <= slot.end
+  })
+}
+
+function checkSchedule(): void {
+  if (isLocked || !autoLockEnabled) return
+
+  if (isInLockTime()) {
+    console.log('Lock time! Creating lock window...')
+    isLocked = true
+    createLockWindow()
+    updateTrayMenu()
+  }
+}
+
+function startScheduleChecker(): void {
+  if (checkInterval) clearInterval(checkInterval)
+  checkInterval = setInterval(checkSchedule, 30000) // 每30秒检查一次
+  checkSchedule() // 立即检查一次
+}
+
+// ============================================================================
+// IPC 处理
+// ============================================================================
+function setupIpcHandlers(): void {
+  // 获取配置
+  ipcMain.handle('get-config', () => {
+    const style = store.get('style') as StyleConfig
+    // 确保 fontSizes 存在
+    if (!style.fontSizes) {
+      style.fontSizes = defaultFontSizes()
+    }
+    return {
+      password: store.get('password'),
+      schedule: store.get('schedule'),
+      style: style,
+      selectedCamera: store.get('selectedCamera')
+    }
+  })
+
+  // 保存配置
+  ipcMain.handle('set-config', (_, config: Partial<AppConfig>) => {
+    if (config.password) store.set('password', config.password)
+    if (config.schedule) store.set('schedule', config.schedule)
+    if (config.style) store.set('style', config.style)
+    if (config.selectedCamera !== undefined) store.set('selectedCamera', config.selectedCamera)
+    return true
+  })
+
+  // 获取样式（给锁屏界面用）
+  ipcMain.handle('get-style', () => {
+    const style = store.get('style') as StyleConfig
+    // 确保 fontSizes 存在
+    if (!style.fontSizes) {
+      style.fontSizes = defaultFontSizes()
+    }
+    const colors = getThemeColors(style)
+    return {
+      ...style,
+      ...colors
+    }
+  })
+
+  // 验证密码
+  ipcMain.handle('verify-password', async (_, password: string): Promise<boolean> => {
+    const pwdConfig = store.get('password') as PasswordConfig
+
+    if (pwdConfig.type === 'fixed' || pwdConfig.type === 'both') {
+      if (password === pwdConfig.fixedPassword) {
+        closeLockWindow()
+        return true
+      }
+    }
+
+    if ((pwdConfig.type === 'totp' || pwdConfig.type === 'both') && pwdConfig.totpSecret) {
+      try {
+        const isValid = totpModule.verify({ token: password, secret: pwdConfig.totpSecret })
+        if (isValid) {
+          closeLockWindow()
+          return true
+        }
+      } catch (e) {
+        console.error('TOTP verification error:', e)
+      }
+    }
+
+    return false
+  })
+
+  // 生成 TOTP 密钥
+  ipcMain.handle('generate-totp-secret', () => {
+    const secret = totpModule.generateSecret()
+    return {
+      secret: secret.base32,
+      otpauthUrl: secret.otpauth_url
+    }
+  })
+
+  // 完成设置向导
+  ipcMain.handle('complete-setup', () => {
+    store.set('hasCompletedSetup', true)
+
+    // 隐藏设置窗口，开始后台运行
+    if (mainWindow) {
+      mainWindow.hide()
+    }
+
+    // 启动定时检查
+    startScheduleChecker()
+
+    return true
+  })
+
+  // 解锁信号（从锁屏页面发送）
+  ipcMain.handle('unlock', () => {
+    closeLockWindow()
+    updateTrayMenu()
+    return true
+  })
+
+  // 打开设置窗口
+  ipcMain.handle('open-settings', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createMainWindow()
+    } else {
+      // 切换到设置页面
+      const pageHash = 'settings'
+      if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+        mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${pageHash}`)
+      } else {
+        mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: pageHash })
+      }
+      mainWindow.show()
+      mainWindow.focus()
+    }
+    return true
+  })
+
+  // 保存解锁记录
+  ipcMain.handle(
+    'save-unlock-record',
+    async (_, record: Omit<UnlockRecord, 'id' | 'photoPath'>) => {
+      try {
+        const fs = await import('fs')
+        const path = await import('path')
+        const { app } = await import('electron')
+
+        const records = (store.get('unlockRecords') as UnlockRecord[]) || []
+        const id = Date.now().toString()
+
+        let photoPath: string | undefined
+
+        // 如果有照片数据，保存为文件
+        if (record.photoData) {
+          const photosDir = path.join(app.getPath('userData'), 'unlock-photos')
+          if (!fs.existsSync(photosDir)) {
+            fs.mkdirSync(photosDir, { recursive: true })
+          }
+
+          const photoFileName = `unlock-${id}-${record.success ? 'success' : 'fail'}.jpg`
+          photoPath = path.join(photosDir, photoFileName)
+
+          // 将 base64 数据转换为 buffer 并保存
+          const base64Data = record.photoData.replace(/^data:image\/jpeg;base64,/, '')
+          fs.writeFileSync(photoPath, Buffer.from(base64Data, 'base64'))
+
+          console.log('Photo saved:', photoPath)
+        }
+
+        const newRecord: UnlockRecord = {
+          ...record,
+          id,
+          photoPath
+        }
+
+        // 删除 photoData 字段（因为已经保存到文件了）
+        delete (newRecord as any).photoData
+
+        records.unshift(newRecord)
+
+        // 只保留最近100条记录
+        if (records.length > 100) {
+          records.length = 100
+        }
+        store.set('unlockRecords', records)
+
+        return true
+      } catch (e) {
+        console.error('Failed to save unlock record:', e)
+        return false
+      }
+    }
+  )
+
+  // 获取解锁记录
+  ipcMain.handle('get-unlock-records', async () => {
+    try {
+      const fs = await import('fs')
+
+      const records = (store.get('unlockRecords') as UnlockRecord[]) || []
+
+      // 为每条记录读取照片文件（如果存在）
+      const recordsWithPhotos = await Promise.all(
+        records.map(async (record) => {
+          if (record.photoPath && fs.existsSync(record.photoPath)) {
+            try {
+              const photoData = fs.readFileSync(record.photoPath)
+              const base64Data = `data:image/jpeg;base64,${photoData.toString('base64')}`
+              return { ...record, photoData: base64Data }
+            } catch (e) {
+              console.error('Failed to read photo:', e)
+              return record
+            }
+          }
+          return record
+        })
+      )
+
+      return recordsWithPhotos
+    } catch (e) {
+      console.error('Failed to get unlock records:', e)
+      return []
+    }
+  })
+
+  // 删除解锁记录
+  ipcMain.handle('delete-unlock-record', async (_, id: string) => {
+    try {
+      const fs = await import('fs')
+
+      const records = (store.get('unlockRecords') as UnlockRecord[]) || []
+      const record = records.find((r) => r.id === id)
+
+      // 如果有关联的照片文件，删除它
+      if (record?.photoPath && fs.existsSync(record.photoPath)) {
+        try {
+          fs.unlinkSync(record.photoPath)
+        } catch (e) {
+          console.error('Failed to delete photo file:', e)
+        }
+      }
+
+      const newRecords = records.filter((r) => r.id !== id)
+      store.set('unlockRecords', newRecords)
+      return true
+    } catch (e) {
+      console.error('Failed to delete unlock record:', e)
+      return false
+    }
+  })
+
+  // 清空所有解锁记录
+  ipcMain.handle('clear-unlock-records', async () => {
+    try {
+      const fs = await import('fs')
+
+      const records = (store.get('unlockRecords') as UnlockRecord[]) || []
+
+      // 删除所有关联的照片文件
+      for (const record of records) {
+        if (record.photoPath && fs.existsSync(record.photoPath)) {
+          try {
+            fs.unlinkSync(record.photoPath)
+          } catch (e) {
+            console.error('Failed to delete photo file:', e)
+          }
+        }
+      }
+
+      // 清空记录
+      store.set('unlockRecords', [])
+      return true
+    } catch (e) {
+      console.error('Failed to clear unlock records:', e)
+      return false
+    }
+  })
+
+  // 获取相机列表
+  ipcMain.handle('get-cameras', async () => {
+    try {
+      // 使用系统命令获取相机列表
+      // 注意：Electron 本身没有直接获取摄像头列表的 API
+      // 我们返回一个特殊标记，让渲染进程自己通过 navigator.mediaDevices 获取
+      return { useRenderer: true }
+    } catch (e) {
+      console.error('Failed to get cameras:', e)
+      return { useRenderer: true, error: String(e) }
+    }
+  })
+
+  // 获取选中的相机
+  ipcMain.handle('get-selected-camera', () => {
+    return store.get('selectedCamera') as string | undefined
+  })
+
+  // 设置选中的相机
+  ipcMain.handle('set-selected-camera', (_, deviceId: string) => {
+    store.set('selectedCamera', deviceId)
+    return true
+  })
+}
+
+// ============================================================================
+// 应用生命周期
+// ============================================================================
+app.whenReady().then(async () => {
+  await initModules()
+
+  electronApp.setAppUserModelId('com.electron.lockit')
+
+  app.on('browser-window-created', (_, window) => {
+    optimizer.watchWindowShortcuts(window)
+  })
+
+  setupIpcHandlers()
+  createTray()
+
+  const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
+
+  if (hasCompletedSetup) {
+    // 已完成设置，直接后台运行
+    startScheduleChecker()
+  } else {
+    // 首次启动，显示设置向导
+    createMainWindow()
+  }
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow()
+    }
+  })
+})
+
+app.on('window-all-closed', () => {
+  // 保持后台运行，不退出
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
+})
+
+// 单实例锁
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
