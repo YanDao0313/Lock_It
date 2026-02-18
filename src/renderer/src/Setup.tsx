@@ -153,7 +153,8 @@ function Button({
     'inline-flex items-center justify-center font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed'
   const variants = {
     primary: 'bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-950',
-    secondary: 'bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100',
+    secondary:
+      'bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100',
     ghost: 'bg-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
   }
   const sizes = {
@@ -277,7 +278,8 @@ export default function Setup() {
         setTotpDeviceName(normalizedDeviceName)
         setTotpQrCodeDataUrl(qrcode)
       } else {
-        const { secret, otpauthUrl, deviceName } = await window.api.generateTOTPSecret(totpDeviceName)
+        const { secret, otpauthUrl, deviceName } =
+          await window.api.generateTOTPSecret(totpDeviceName)
         const qrcode = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 })
 
         setTotpSecret(secret)
@@ -362,9 +364,7 @@ export default function Setup() {
         <div className="px-6 py-4 border-b border-neutral-200 flex gap-1">
           {steps.map((name, index) => (
             <div key={name} className="flex-1">
-              <div
-                className={`h-1 ${index <= step ? 'bg-neutral-900' : 'bg-neutral-200'}`}
-              />
+              <div className={`h-1 ${index <= step ? 'bg-neutral-900' : 'bg-neutral-200'}`} />
               <p className="text-[11px] text-neutral-500 mt-1 truncate">{name}</p>
             </div>
           ))}
@@ -386,11 +386,21 @@ export default function Setup() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-neutral-600 mb-1.5">固定密码</label>
-                  <Input value={fixedPassword} onChange={setFixedPassword} placeholder="输入6位数字" type="password" />
+                  <Input
+                    value={fixedPassword}
+                    onChange={setFixedPassword}
+                    placeholder="输入6位数字"
+                    type="password"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-neutral-600 mb-1.5">确认固定密码</label>
-                  <Input value={confirmPassword} onChange={setConfirmPassword} placeholder="再次输入6位数字" type="password" />
+                  <Input
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    placeholder="再次输入6位数字"
+                    type="password"
+                  />
                 </div>
               </div>
               {passwordError && <p className="text-xs text-red-600 mt-3">{passwordError}</p>}
@@ -458,14 +468,20 @@ export default function Setup() {
                 {totpError && <p className="text-xs text-red-600">{totpError}</p>}
 
                 {isTotpDeviceConfirmed && (
-                  <p className="text-xs text-neutral-500">当前设备名称：LockIt - {totpDeviceName}</p>
+                  <p className="text-xs text-neutral-500">
+                    当前设备名称：LockIt - {totpDeviceName}
+                  </p>
                 )}
 
                 {totpEnabled && (
                   <div className="p-3 bg-neutral-50 border border-neutral-200">
                     <p className="text-xs text-neutral-500 mb-1">TOTP 密钥</p>
                     <p className="text-sm font-mono break-all">
-                      {totpSecret ? (totpVisible ? totpSecret : '••••••••••••••••••••••••••••••••') : '尚未生成'}
+                      {totpSecret
+                        ? totpVisible
+                          ? totpSecret
+                          : '••••••••••••••••••••••••••••••••'
+                        : '尚未生成'}
                     </p>
                     <p className="text-xs text-neutral-500 mt-2">可在认证器应用中手动添加该密钥</p>
                   </div>
@@ -494,14 +510,18 @@ export default function Setup() {
                         key={key}
                         onClick={() => setSelectedDay(key)}
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm border ${
-                          isSelected ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white border-neutral-200'
+                          isSelected
+                            ? 'bg-neutral-900 text-white border-neutral-900'
+                            : 'bg-white border-neutral-200'
                         }`}
                       >
                         <span className="flex items-center gap-2">
                           <span>{short}</span>
                           <span>{label}</span>
                         </span>
-                        <span className={`text-xs ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}>
+                        <span
+                          className={`text-xs ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}
+                        >
                           {enabled ? count : '关'}
                         </span>
                       </button>
@@ -515,7 +535,9 @@ export default function Setup() {
                       <input
                         type="checkbox"
                         checked={schedule[selectedDay].enabled}
-                        onChange={(e) => updateDaySchedule(selectedDay, { enabled: e.target.checked })}
+                        onChange={(e) =>
+                          updateDaySchedule(selectedDay, { enabled: e.target.checked })
+                        }
                       />
                       启用 {dayNames.find((d) => d.key === selectedDay)?.label}
                     </label>
@@ -551,7 +573,11 @@ export default function Setup() {
                               }
                               className="px-2 py-1.5 border border-neutral-300 text-sm"
                             />
-                            <Button variant="ghost" size="sm" onClick={() => deleteSlot(selectedDay, index)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteSlot(selectedDay, index)}
+                            >
                               删除
                             </Button>
                           </div>
@@ -572,11 +598,17 @@ export default function Setup() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs text-neutral-600 mb-1.5">主标题</label>
-                    <Input value={style.centerText} onChange={(v) => setStyle((s) => ({ ...s, centerText: v }))} />
+                    <Input
+                      value={style.centerText}
+                      onChange={(v) => setStyle((s) => ({ ...s, centerText: v }))}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs text-neutral-600 mb-1.5">副标题</label>
-                    <Input value={style.subText} onChange={(v) => setStyle((s) => ({ ...s, subText: v }))} />
+                    <Input
+                      value={style.subText}
+                      onChange={(v) => setStyle((s) => ({ ...s, subText: v }))}
+                    />
                   </div>
                 </div>
 
@@ -607,13 +639,23 @@ export default function Setup() {
                   </div>
                   <div>
                     <label className="block text-xs text-neutral-600 mb-1.5">文字色</label>
-                    <Input value={style.textColor} onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))} />
+                    <Input
+                      value={style.textColor}
+                      onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))}
+                    />
                   </div>
                 </div>
 
-                <div className="p-6" style={{ backgroundColor: style.backgroundColor, color: style.textColor }}>
-                  <p className="text-2xl font-medium text-center whitespace-pre-line">{style.centerText}</p>
-                  <p className="text-lg mt-2 text-center whitespace-pre-line opacity-90">{style.subText}</p>
+                <div
+                  className="p-6"
+                  style={{ backgroundColor: style.backgroundColor, color: style.textColor }}
+                >
+                  <p className="text-2xl font-medium text-center whitespace-pre-line">
+                    {style.centerText}
+                  </p>
+                  <p className="text-lg mt-2 text-center whitespace-pre-line opacity-90">
+                    {style.subText}
+                  </p>
                   <div className="grid grid-cols-2 gap-2 mt-6 text-sm opacity-70">
                     <span className="whitespace-pre-line">{style.bottomLeftText}</span>
                     <span className="text-right whitespace-pre-line">{style.bottomRightText}</span>
@@ -627,7 +669,9 @@ export default function Setup() {
             <Card title="配置完成" subtitle="点击下方按钮保存并进入设置页面">
               <div className="text-sm text-neutral-700 space-y-2">
                 <p>固定密码：已配置</p>
-                <p>TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}</p>
+                <p>
+                  TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}
+                </p>
                 <p>锁屏时段：已配置</p>
                 <p>界面样式：已配置</p>
               </div>
@@ -636,7 +680,11 @@ export default function Setup() {
         </main>
 
         <footer className="px-6 py-4 border-t border-neutral-200 flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || isSaving}>
+          <Button
+            variant="ghost"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0 || isSaving}
+          >
             <ChevronLeft className="w-4 h-4 mr-1" />
             上一步
           </Button>

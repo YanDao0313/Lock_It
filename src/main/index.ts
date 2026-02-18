@@ -101,7 +101,10 @@ interface UnlockRecord {
 
 type TOTPModule = {
   generateSecret: () => string
-  verifySync: (params: { token: string; secret: string }) => boolean | { valid?: boolean } | undefined
+  verifySync: (params: {
+    token: string
+    secret: string
+  }) => boolean | { valid?: boolean } | undefined
 }
 
 type PasswordVerifyResult = {
@@ -270,9 +273,8 @@ async function initModules(): Promise<void> {
 
 function normalizePasswordConfig(password?: PasswordConfig): PasswordConfig {
   const source = password || { type: 'fixed', fixedPassword: '123456' }
-  const fixedPassword = source.fixedPassword && /^\d{6}$/.test(source.fixedPassword)
-    ? source.fixedPassword
-    : '123456'
+  const fixedPassword =
+    source.fixedPassword && /^\d{6}$/.test(source.fixedPassword) ? source.fixedPassword : '123456'
   const totpDeviceName = normalizeTotpDeviceName(source.totpDeviceName)
 
   if (source.type === 'both') {
@@ -725,7 +727,10 @@ function startScheduleChecker(): void {
 function verifyPasswordAgainstConfig(inputPassword: string): PasswordVerifyResult {
   const pwdConfig = normalizePasswordConfig(store.get('password') as PasswordConfig)
 
-  if ((pwdConfig.type === 'fixed' || pwdConfig.type === 'both') && inputPassword === pwdConfig.fixedPassword) {
+  if (
+    (pwdConfig.type === 'fixed' || pwdConfig.type === 'both') &&
+    inputPassword === pwdConfig.fixedPassword
+  ) {
     return { success: true, method: 'fixed' }
   }
 
@@ -1076,40 +1081,43 @@ function setupIpcHandlers(): void {
 // ============================================================================
 // 应用生命周期
 // ============================================================================
-app.whenReady().then(async () => {
-  await initModules()
+app
+  .whenReady()
+  .then(async () => {
+    await initModules()
 
-  electronApp.setAppUserModelId('com.electron.lockit')
+    electronApp.setAppUserModelId('com.electron.lockit')
 
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-    if (!is.dev) {
-      registerProductionShortcutGuards(window)
-    }
-  })
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+      if (!is.dev) {
+        registerProductionShortcutGuards(window)
+      }
+    })
 
-  setupIpcHandlers()
-  createTray()
+    setupIpcHandlers()
+    createTray()
 
-  const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
+    const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
 
-  if (hasCompletedSetup) {
-    // 已完成设置，直接后台运行
-    startScheduleChecker()
-  } else {
-    // 首次启动，显示设置向导
-    createMainWindow()
-  }
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (hasCompletedSetup) {
+      // 已完成设置，直接后台运行
+      startScheduleChecker()
+    } else {
+      // 首次启动，显示设置向导
       createMainWindow()
     }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow()
+      }
+    })
   })
-}).catch((error) => {
-  console.error('Application bootstrap failed:', error)
-  app.quit()
-})
+  .catch((error) => {
+    console.error('Application bootstrap failed:', error)
+    app.quit()
+  })
 
 app.on('window-all-closed', () => {
   // 保持后台运行，不退出

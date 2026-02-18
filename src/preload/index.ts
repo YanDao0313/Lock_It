@@ -109,11 +109,15 @@ export interface API {
 
   // 密码验证
   verifyPassword: (password: string) => Promise<boolean>
-  verifyPasswordWithMethod: (password: string) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
+  verifyPasswordWithMethod: (
+    password: string
+  ) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
   verifySettingsPassword: (password: string) => Promise<boolean>
 
   // TOTP
-  generateTOTPSecret: (deviceName?: string) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
+  generateTOTPSecret: (
+    deviceName?: string
+  ) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
 
   // 完成设置
   completeSetup: () => Promise<boolean>
@@ -183,7 +187,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('verify-settings-password', password),
 
   // TOTP
-  generateTOTPSecret: (deviceName?: string) => ipcRenderer.invoke('generate-totp-secret', deviceName),
+  generateTOTPSecret: (deviceName?: string) =>
+    ipcRenderer.invoke('generate-totp-secret', deviceName),
 
   // 完成设置
   completeSetup: () => ipcRenderer.invoke('complete-setup'),

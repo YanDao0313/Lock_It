@@ -286,7 +286,12 @@ export default function LockScreen() {
           timePosition: config.timePosition || 'hidden',
           timeFormat: config.timeFormat || 'HH:mm:ss',
           closeScreenPrompt: config.closeScreenPrompt || '请关闭投影设备后继续',
-          fontSizes: config.fontSizes || { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
+          fontSizes: config.fontSizes || {
+            centerText: 48,
+            subText: 24,
+            bottomText: 14,
+            timeText: 18
+          },
           textAligns: config.textAligns || {
             centerText: 'center',
             subText: 'center',
@@ -508,7 +513,7 @@ export default function LockScreen() {
       'top-right': 'fixed top-8 right-8',
       'bottom-left': 'fixed bottom-8 left-8',
       'bottom-right': 'fixed bottom-8 right-8',
-      'center': 'mb-6'
+      center: 'mb-6'
     }
     return (
       <div
@@ -603,7 +608,7 @@ export default function LockScreen() {
               {style.closeScreenPrompt}
             </h3>
             <p className="text-sm opacity-60 mb-6" style={{ color: style.textColor }}>
-              点击"已关闭"继续解锁，或点击背景取消
+              点击"已关闭"继续操作，或点击背景取消
             </p>
             <div className="flex gap-3 justify-center">
               <button
@@ -618,7 +623,7 @@ export default function LockScreen() {
                 className="px-6 py-2 text-sm font-medium transition-colors"
                 style={{ backgroundColor: style.textColor, color: style.backgroundColor }}
               >
-                已关闭，继续
+                已关闭
               </button>
             </div>
           </div>
@@ -633,7 +638,10 @@ export default function LockScreen() {
           style={{ cursor: 'default' }}
         >
           <div className="w-80" style={{ backgroundColor: style.backgroundColor }}>
-            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: `${style.textColor}20` }}>
+            <div
+              className="flex items-center justify-between p-4 border-b"
+              style={{ borderColor: `${style.textColor}20` }}
+            >
               <span className="text-sm font-medium" style={{ color: style.textColor }}>
                 输入密码
               </span>
@@ -664,7 +672,11 @@ export default function LockScreen() {
                     key={i}
                     className="w-10 h-12 flex items-center justify-center text-lg font-bold border-2 transition-all"
                     style={{
-                      borderColor: error ? '#ef4444' : i < pin.length ? style.textColor : `${style.textColor}30`,
+                      borderColor: error
+                        ? '#ef4444'
+                        : i < pin.length
+                          ? style.textColor
+                          : `${style.textColor}30`,
                       backgroundColor: i < pin.length ? `${style.textColor}15` : 'transparent',
                       color: style.textColor
                     }}
@@ -713,8 +725,17 @@ export default function LockScreen() {
       {unlocked && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="p-10 text-center" style={{ backgroundColor: style.backgroundColor }}>
-            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#22c55e' }}>
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div
+              className="w-16 h-16 flex items-center justify-center mx-auto mb-4"
+              style={{ backgroundColor: '#22c55e' }}
+            >
+              <svg
+                className="w-8 h-8 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>

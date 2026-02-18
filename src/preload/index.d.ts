@@ -84,9 +84,13 @@ export interface API {
   }) => Promise<boolean>
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>
   verifyPassword: (password: string) => Promise<boolean>
-  verifyPasswordWithMethod: (password: string) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
+  verifyPasswordWithMethod: (
+    password: string
+  ) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
   verifySettingsPassword: (password: string) => Promise<boolean>
-  generateTOTPSecret: (deviceName?: string) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
+  generateTOTPSecret: (
+    deviceName?: string
+  ) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
   completeSetup: () => Promise<boolean>
   unlock: () => Promise<boolean>
   openSettings: () => Promise<boolean>

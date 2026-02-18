@@ -257,15 +257,17 @@ function Button({
   disabled?: boolean
   className?: string
 }) {
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed'
-  
+  const baseStyles =
+    'inline-flex items-center justify-center font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed'
+
   const variants = {
     primary: 'bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-950',
-    secondary: 'bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100',
+    secondary:
+      'bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100',
     ghost: 'bg-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100',
     danger: 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
   }
-  
+
   const sizes = {
     sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2 text-sm',
@@ -369,13 +371,7 @@ function Select({
 }
 
 // 开关组件
-function Toggle({
-  checked,
-  onChange
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
   return (
     <button
       onClick={() => onChange(!checked)}
@@ -524,7 +520,8 @@ function PasswordSection({
           totpDeviceName: normalizedDeviceName
         })
       } else {
-        const { secret, otpauthUrl, deviceName } = await window.api.generateTOTPSecret(normalizedDeviceName)
+        const { secret, otpauthUrl, deviceName } =
+          await window.api.generateTOTPSecret(normalizedDeviceName)
         const qrcode = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 })
         setQrCodeDataUrl(qrcode)
         onChange({
@@ -607,7 +604,9 @@ function PasswordSection({
             </div>
             <div>
               <p className="text-sm font-medium text-neutral-900">固定密码</p>
-              <p className="text-xs text-neutral-500">当前密码: {password.fixedPassword ? '••••••' : '未配置'}</p>
+              <p className="text-xs text-neutral-500">
+                当前密码: {password.fixedPassword ? '••••••' : '未配置'}
+              </p>
             </div>
           </div>
           <Button
@@ -688,7 +687,9 @@ function PasswordSection({
           </div>
 
           {isDeviceConfirmed && normalizedDeviceName && (
-            <p className="text-xs text-neutral-500">当前设备名称：LockIt - {normalizedDeviceName}</p>
+            <p className="text-xs text-neutral-500">
+              当前设备名称：LockIt - {normalizedDeviceName}
+            </p>
           )}
 
           {password.totpSecret ? (
@@ -754,6 +755,7 @@ function PasswordSection({
 function PhotosSection() {
   const [records, setRecords] = useState<UnlockRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [selectedRecord, setSelectedRecord] = useState<UnlockRecord | null>(null)
   const [showClearAuthModal, setShowClearAuthModal] = useState(false)
@@ -778,6 +780,21 @@ function PhotosSection() {
   useEffect(() => {
     loadRecords()
   }, [loadRecords])
+
+  const handleRefreshRecords = async () => {
+    if (loading || isRefreshing) return
+    setIsRefreshing(true)
+    setError('')
+    try {
+      const data = await window.api.getUnlockRecords()
+      setRecords(data || [])
+    } catch (e) {
+      console.error('Failed to refresh records:', e)
+      setError('刷新失败')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const handleDelete = async (id: string) => {
     try {
@@ -851,8 +868,14 @@ function PhotosSection() {
       <div className="flex flex-col items-center justify-center h-64 text-neutral-500">
         <AlertCircle className="w-12 h-12 mb-3 stroke-1" />
         <p className="text-sm">{error}</p>
-        <Button variant="secondary" size="sm" onClick={loadRecords} className="mt-4">
-          重试
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void handleRefreshRecords()}
+          disabled={isRefreshing}
+          className="mt-4"
+        >
+          {isRefreshing ? '刷新中...' : '重试'}
         </Button>
       </div>
     )
@@ -864,6 +887,15 @@ function PhotosSection() {
         <Image className="w-16 h-16 mb-4 stroke-1" />
         <p className="text-sm">暂无解锁记录</p>
         <p className="text-xs mt-1 text-neutral-400">解锁时会自动拍摄照片</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void handleRefreshRecords()}
+          disabled={isRefreshing}
+          className="mt-4"
+        >
+          {isRefreshing ? '刷新中...' : '刷新'}
+        </Button>
       </div>
     )
   }
@@ -892,9 +924,19 @@ function PhotosSection() {
       {/* 操作栏 */}
       <div className="flex justify-between items-center">
         <p className="text-xs text-neutral-500">共 {records.length} 条记录（保留最近100条）</p>
-        <Button variant="danger" size="sm" onClick={handleClearAll}>
-          清空所有
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void handleRefreshRecords()}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? '刷新中...' : '刷新'}
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleClearAll}>
+            清空所有
+          </Button>
+        </div>
       </div>
 
       {/* 记录列表 */}
@@ -918,9 +960,7 @@ function PhotosSection() {
                 <div className="flex items-center gap-2 mb-1">
                   <span
                     className={`text-xs px-2 py-0.5 ${
-                      record.success
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
+                      record.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                     }`}
                   >
                     {record.success ? '成功' : '失败'}
@@ -969,7 +1009,9 @@ function PhotosSection() {
                 >
                   {selectedRecord.success ? '解锁成功' : '密码错误'}
                 </span>
-                <span className="text-sm text-neutral-500">第 {selectedRecord.attemptCount} 次尝试</span>
+                <span className="text-sm text-neutral-500">
+                  第 {selectedRecord.attemptCount} 次尝试
+                </span>
                 {selectedRecord.success && (
                   <span className="text-sm text-neutral-500">
                     解锁方式：{getUnlockMethodLabel(selectedRecord.unlockMethod)}
@@ -1183,7 +1225,13 @@ function CameraSection({
       <Card className="p-0 overflow-hidden">
         <div className="aspect-video bg-neutral-900 flex items-center justify-center relative">
           {selectedCamera ? (
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
           ) : (
             <span className="text-neutral-500">请选择摄像头</span>
           )}
@@ -1338,12 +1386,12 @@ export default function Settings() {
           }
         : {
             themeMode: 'dark',
-          centerText: '此计算机因违规外联已被阻断',
-          subText: '请等待安全部门与你联系',
-          bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
+            centerText: '此计算机因违规外联已被阻断',
+            subText: '请等待安全部门与你联系',
+            bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
             bottomRightText: '',
-          backgroundColor: '#0066cc',
-          textColor: '#ffffff',
+            backgroundColor: '#0066cc',
+            textColor: '#ffffff',
             lightBackgroundColor: '#fafafa',
             lightTextColor: '#171717',
             timePosition: 'hidden',
@@ -1547,12 +1595,15 @@ export default function Settings() {
                   key={item.id}
                   onClick={() => handleTabChange(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-all duration-150
-                    ${activeTab === item.id
-                      ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-600 hover:bg-neutral-100'
+                    ${
+                      activeTab === item.id
+                        ? 'bg-neutral-900 text-white'
+                        : 'text-neutral-600 hover:bg-neutral-100'
                     }`}
                 >
-                  <Icon className={`w-4 h-4 ${activeTab === item.id ? 'text-white' : 'text-neutral-400'}`} />
+                  <Icon
+                    className={`w-4 h-4 ${activeTab === item.id ? 'text-white' : 'text-neutral-400'}`}
+                  />
                   <span>{item.label}</span>
                   {activeTab === item.id && <ChevronRight className="w-4 h-4 ml-auto" />}
                 </button>
@@ -1581,11 +1632,12 @@ export default function Settings() {
                           key={key}
                           onClick={() => setSelectedDay(key)}
                           className={`flex-1 h-10 text-sm font-medium transition-colors
-                            ${selectedDay === key
-                              ? 'bg-neutral-900 text-white'
-                              : enabled
-                                ? 'bg-neutral-100 text-neutral-900'
-                                : 'bg-neutral-50 text-neutral-400'
+                            ${
+                              selectedDay === key
+                                ? 'bg-neutral-900 text-white'
+                                : enabled
+                                  ? 'bg-neutral-100 text-neutral-900'
+                                  : 'bg-neutral-50 text-neutral-400'
                             }`}
                         >
                           {short}
@@ -1618,7 +1670,9 @@ export default function Settings() {
                   {schedule[selectedDay]?.enabled && (
                     <div className="space-y-2">
                       {schedule[selectedDay]?.slots.length === 0 ? (
-                        <p className="text-sm text-neutral-400 py-4 text-center">点击上方按钮添加时段</p>
+                        <p className="text-sm text-neutral-400 py-4 text-center">
+                          点击上方按钮添加时段
+                        </p>
                       ) : (
                         schedule[selectedDay]?.slots.map((slot, i) => (
                           <TimeSlotEditor
@@ -1663,13 +1717,18 @@ export default function Settings() {
                         className="group text-left"
                       >
                         <div className="flex gap-0.5 mb-2">
-                          <div className="h-10 flex-1" style={{ backgroundColor: theme.backgroundColor }} />
+                          <div
+                            className="h-10 flex-1"
+                            style={{ backgroundColor: theme.backgroundColor }}
+                          />
                           <div
                             className="h-10 flex-1"
                             style={{ backgroundColor: theme.lightBackgroundColor }}
                           />
                         </div>
-                        <p className="text-xs text-neutral-600 group-hover:text-neutral-900">{theme.name}</p>
+                        <p className="text-xs text-neutral-600 group-hover:text-neutral-900">
+                          {theme.name}
+                        </p>
                       </button>
                     ))}
                   </div>
@@ -1704,10 +1763,15 @@ export default function Settings() {
                         <input
                           type="color"
                           value={style.backgroundColor}
-                          onChange={(e) => setStyle((s) => ({ ...s, backgroundColor: e.target.value }))}
+                          onChange={(e) =>
+                            setStyle((s) => ({ ...s, backgroundColor: e.target.value }))
+                          }
                           className="w-8 h-8 p-0 border-0 cursor-pointer"
                         />
-                        <Input value={style.backgroundColor} onChange={(v) => setStyle((s) => ({ ...s, backgroundColor: v }))} />
+                        <Input
+                          value={style.backgroundColor}
+                          onChange={(v) => setStyle((s) => ({ ...s, backgroundColor: v }))}
+                        />
                       </div>
                       <div className="flex items-center gap-3">
                         <input
@@ -1716,7 +1780,10 @@ export default function Settings() {
                           onChange={(e) => setStyle((s) => ({ ...s, textColor: e.target.value }))}
                           className="w-8 h-8 p-0 border-0 cursor-pointer"
                         />
-                        <Input value={style.textColor} onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))} />
+                        <Input
+                          value={style.textColor}
+                          onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))}
+                        />
                       </div>
                     </div>
                   </Card>
@@ -1726,7 +1793,9 @@ export default function Settings() {
                         <input
                           type="color"
                           value={style.lightBackgroundColor || '#fafafa'}
-                          onChange={(e) => setStyle((s) => ({ ...s, lightBackgroundColor: e.target.value }))}
+                          onChange={(e) =>
+                            setStyle((s) => ({ ...s, lightBackgroundColor: e.target.value }))
+                          }
                           className="w-8 h-8 p-0 border-0 cursor-pointer"
                         />
                         <Input
@@ -1738,7 +1807,9 @@ export default function Settings() {
                         <input
                           type="color"
                           value={style.lightTextColor || '#171717'}
-                          onChange={(e) => setStyle((s) => ({ ...s, lightTextColor: e.target.value }))}
+                          onChange={(e) =>
+                            setStyle((s) => ({ ...s, lightTextColor: e.target.value }))
+                          }
                           className="w-8 h-8 p-0 border-0 cursor-pointer"
                         />
                         <Input
@@ -1757,28 +1828,36 @@ export default function Settings() {
                       value={style.fontSizes.centerText}
                       min={20}
                       max={80}
-                      onChange={(v) => setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, centerText: v } }))}
+                      onChange={(v) =>
+                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, centerText: v } }))
+                      }
                     />
                     <Slider
                       label="副标题"
                       value={style.fontSizes.subText}
                       min={16}
                       max={48}
-                      onChange={(v) => setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, subText: v } }))}
+                      onChange={(v) =>
+                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, subText: v } }))
+                      }
                     />
                     <Slider
                       label="底部文字"
                       value={style.fontSizes.bottomText}
                       min={10}
                       max={32}
-                      onChange={(v) => setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, bottomText: v } }))}
+                      onChange={(v) =>
+                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, bottomText: v } }))
+                      }
                     />
                     <Slider
                       label="时间文字"
                       value={style.fontSizes.timeText}
                       min={12}
                       max={40}
-                      onChange={(v) => setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, timeText: v } }))}
+                      onChange={(v) =>
+                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, timeText: v } }))
+                      }
                     />
                   </div>
                 </Card>
@@ -1792,7 +1871,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            textAligns: { ...s.textAligns, centerText: v as TextAlignConfig['centerText'] }
+                            textAligns: {
+                              ...s.textAligns,
+                              centerText: v as TextAlignConfig['centerText']
+                            }
                           }))
                         }
                         options={textAlignOptions}
@@ -1803,7 +1885,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            fontWeights: { ...s.fontWeights, centerText: v as FontWeightConfig['centerText'] }
+                            fontWeights: {
+                              ...s.fontWeights,
+                              centerText: v as FontWeightConfig['centerText']
+                            }
                           }))
                         }
                         options={fontWeightOptions}
@@ -1817,7 +1902,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            textAligns: { ...s.textAligns, subText: v as TextAlignConfig['subText'] }
+                            textAligns: {
+                              ...s.textAligns,
+                              subText: v as TextAlignConfig['subText']
+                            }
                           }))
                         }
                         options={textAlignOptions}
@@ -1828,7 +1916,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            fontWeights: { ...s.fontWeights, subText: v as FontWeightConfig['subText'] }
+                            fontWeights: {
+                              ...s.fontWeights,
+                              subText: v as FontWeightConfig['subText']
+                            }
                           }))
                         }
                         options={fontWeightOptions}
@@ -1842,7 +1933,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            textAligns: { ...s.textAligns, bottomText: v as TextAlignConfig['bottomText'] }
+                            textAligns: {
+                              ...s.textAligns,
+                              bottomText: v as TextAlignConfig['bottomText']
+                            }
                           }))
                         }
                         options={textAlignOptions}
@@ -1853,7 +1947,10 @@ export default function Settings() {
                         onChange={(v) =>
                           setStyle((s) => ({
                             ...s,
-                            fontWeights: { ...s.fontWeights, bottomText: v as FontWeightConfig['bottomText'] }
+                            fontWeights: {
+                              ...s.fontWeights,
+                              bottomText: v as FontWeightConfig['bottomText']
+                            }
                           }))
                         }
                         options={fontWeightOptions}
@@ -1930,7 +2027,10 @@ export default function Settings() {
                   </div>
                 </Card>
 
-                <Card title="预览" subtitle={`当前模式: ${previewMode === 'dark' ? '深色' : '浅色'}`}>
+                <Card
+                  title="预览"
+                  subtitle={`当前模式: ${previewMode === 'dark' ? '深色' : '浅色'}`}
+                >
                   <div className="mb-4 flex gap-2">
                     <Button
                       variant={previewMode === 'dark' ? 'primary' : 'secondary'}
@@ -1949,10 +2049,16 @@ export default function Settings() {
                   </div>
                   <div
                     className="p-8 text-center min-h-[180px] flex flex-col justify-center"
-                    style={{ backgroundColor: previewColors.backgroundColor, color: previewColors.textColor }}
+                    style={{
+                      backgroundColor: previewColors.backgroundColor,
+                      color: previewColors.textColor
+                    }}
                   >
                     {style.timePosition === 'center' && (
-                      <div className="font-mono mb-3 opacity-60" style={{ fontSize: style.fontSizes.timeText }}>
+                      <div
+                        className="font-mono mb-3 opacity-60"
+                        style={{ fontSize: style.fontSizes.timeText }}
+                      >
                         {new Date().toLocaleTimeString()}
                       </div>
                     )}
@@ -2025,7 +2131,11 @@ export default function Settings() {
               <p className="text-xs text-neutral-500 mt-1">请选择接下来要执行的操作</p>
             </div>
             <div className="p-6 space-y-3">
-              <Button onClick={handleSaveAndContinue} disabled={isLoading} className="w-full justify-center">
+              <Button
+                onClick={handleSaveAndContinue}
+                disabled={isLoading}
+                className="w-full justify-center"
+              >
                 保存并继续
               </Button>
               <Button
@@ -2036,7 +2146,12 @@ export default function Settings() {
               >
                 不保存并继续
               </Button>
-              <Button variant="ghost" onClick={handleBack} disabled={isLoading} className="w-full justify-center">
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={isLoading}
+                className="w-full justify-center"
+              >
                 返回
               </Button>
             </div>
