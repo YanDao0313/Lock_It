@@ -1,18 +1,6 @@
-import { useState, useEffect } from 'react'
-import {
-  Check,
-  ChevronRight,
-  ChevronLeft,
-  Clock,
-  Shield,
-  Calendar,
-  Palette,
-  Plus,
-  Trash2,
-  Monitor,
-  Moon,
-  Sun
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Check, Shield, Calendar, KeyRound } from 'lucide-react'
+import QRCode from 'qrcode'
 
 // ============================================================================
 // 类型定义
@@ -37,17 +25,42 @@ interface WeeklySchedule {
   sunday: DaySchedule
 }
 
+interface FontSizeConfig {
+  centerText: number
+  subText: number
+  bottomText: number
+  timeText: number
+}
+
+interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 interface StyleConfig {
-  themeMode: 'light' | 'dark' | 'system'
+  themeMode: 'light' | 'dark' | 'system' | 'custom'
+  themeName?: string
   centerText: string
   subText: string
   bottomLeftText: string
   bottomRightText: string
   backgroundColor: string
   textColor: string
+  lightBackgroundColor?: string
+  lightTextColor?: string
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
   timeFormat: string
   closeScreenPrompt: string
+  fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 const dayNames: { key: keyof WeeklySchedule; label: string; short: string }[] = [
@@ -60,6 +73,15 @@ const dayNames: { key: keyof WeeklySchedule; label: string; short: string }[] = 
   { key: 'sunday', label: '周日', short: '日' }
 ]
 
+function generateDefaultTotpDeviceName(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let result = ''
+  for (let i = 0; i < 4; i += 1) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
 const defaultSchedule = (): WeeklySchedule => ({
   monday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
   tuesday: { enabled: true, slots: [{ start: '08:00', end: '17:00' }] },
@@ -70,674 +92,583 @@ const defaultSchedule = (): WeeklySchedule => ({
   sunday: { enabled: false, slots: [] }
 })
 
-// ============================================================================
-// 步骤指示器
-// ============================================================================
-function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
-  return (
-    <div className="flex items-center justify-center gap-2 mb-8">
-      {Array.from({ length: totalSteps }, (_, i) => (
-        <div
-          key={i}
-          className={`h-2 rounded-full transition-all duration-300 ${
-            i < currentStep
-              ? 'w-8 bg-blue-600'
-              : i === currentStep
-                ? 'w-8 bg-blue-400'
-                : 'w-2 bg-gray-300'
-          }`}
-        />
-      ))}
-    </div>
-  )
-}
+const defaultStyle = (): StyleConfig => ({
+  themeMode: 'dark',
+  centerText: '此计算机因违规外联已被阻断',
+  subText: '请等待安全部门与你联系',
+  bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
+  bottomRightText: '',
+  backgroundColor: '#0066cc',
+  textColor: '#ffffff',
+  lightBackgroundColor: '#fafafa',
+  lightTextColor: '#171717',
+  timePosition: 'hidden',
+  timeFormat: 'HH:mm:ss',
+  closeScreenPrompt: '请关闭班级大屏后再继续操作',
+  fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
+  textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
+  fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
+})
 
-// ============================================================================
-// 步骤 1: 欢迎
-// ============================================================================
-function WelcomeStep({ onNext }: { onNext: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full text-center">
-      <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mb-6">
-        <Shield className="w-10 h-10 text-white" />
-      </div>
-      <h1 className="text-2xl font-medium text-gray-800 mb-3">欢迎使用 Lock It</h1>
-      <p className="text-gray-600 mb-8 max-w-sm">智能锁屏助手，帮助您在指定时间段自动锁定屏幕</p>
-      <div className="space-y-2 text-left bg-gray-50 p-4 rounded-lg mb-8 text-sm">
-        <div className="flex items-center gap-3 text-gray-700">
-          <Clock className="w-4 h-4 text-blue-600" />
-          <span>按周设置锁屏时间段</span>
-        </div>
-        <div className="flex items-center gap-3 text-gray-700">
-          <Shield className="w-4 h-4 text-green-600" />
-          <span>6位数字密码保护</span>
-        </div>
-        <div className="flex items-center gap-3 text-gray-700">
-          <Palette className="w-4 h-4 text-purple-600" />
-          <span>自定义锁屏界面样式</span>
-        </div>
-      </div>
-      <button
-        onClick={onNext}
-        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
-      >
-        开始配置
-        <ChevronRight className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
-// ============================================================================
-// 步骤 2: 密码设置
-// ============================================================================
-function PasswordStep({
-  password,
-  onChange
+function Card({
+  children,
+  title,
+  subtitle,
+  className = ''
 }: {
-  password: string
-  onChange: (pwd: string) => void
+  children: React.ReactNode
+  title?: string
+  subtitle?: string
+  className?: string
 }) {
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
-
-  const handlePasswordChange = (value: string) => {
-    if (value.length <= 6 && /^\d*$/.test(value)) {
-      onChange(value)
-      setError('')
-    }
-  }
-
-  const handleConfirmChange = (value: string) => {
-    if (value.length <= 6 && /^\d*$/.test(value)) {
-      setConfirmPassword(value)
-      setError('')
-    }
-  }
-
-  useEffect(() => {
-    if (confirmPassword && password !== confirmPassword) {
-      setError('两次输入的密码不一致')
-    } else if (password.length > 0 && password.length < 6) {
-      setError('密码需要6位数字')
-    } else {
-      setError('')
-    }
-  }, [password, confirmPassword])
-
-  const isValid = password.length === 6 && password === confirmPassword
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="text-center mb-6">
-        <h2 className="text-xl font-medium text-gray-800 mb-1">设置解锁密码</h2>
-        <p className="text-gray-500 text-sm">设置6位数字密码用于解锁屏幕</p>
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="w-full max-w-sm space-y-5">
-          {/* 密码输入 */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">输入密码</label>
-            <div className="flex gap-2 justify-center">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-10 h-12 border-2 rounded-lg flex items-center justify-center text-xl font-bold transition-colors ${
-                    i < password.length
-                      ? 'border-blue-600 bg-blue-50 text-blue-600'
-                      : 'border-gray-200 text-gray-300'
-                  }`}
-                >
-                  {password[i] ? '●' : ''}
-                </div>
-              ))}
-            </div>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={password}
-              onChange={(e) => handlePasswordChange(e.target.value)}
-              className="absolute opacity-0 w-0 h-0"
-              autoFocus
-              id="password-input"
-            />
-            <button
-              onClick={() => document.getElementById('password-input')?.focus()}
-              className="mt-2 text-sm text-blue-600 hover:text-blue-700 w-full text-center"
-            >
-              点击输入密码
-            </button>
-          </div>
-
-          {/* 确认密码 */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">确认密码</label>
-            <div className="flex gap-2 justify-center">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-10 h-12 border-2 rounded-lg flex items-center justify-center text-xl font-bold transition-colors ${
-                    i < confirmPassword.length
-                      ? confirmPassword === password
-                        ? 'border-green-500 bg-green-50 text-green-600'
-                        : 'border-red-500 bg-red-50 text-red-600'
-                      : 'border-gray-200 text-gray-300'
-                  }`}
-                >
-                  {confirmPassword[i] ? '●' : ''}
-                </div>
-              ))}
-            </div>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={confirmPassword}
-              onChange={(e) => handleConfirmChange(e.target.value)}
-              className="absolute opacity-0 w-0 h-0"
-              id="confirm-password-input"
-            />
-            <button
-              onClick={() => document.getElementById('confirm-password-input')?.focus()}
-              className="mt-2 text-sm text-blue-600 hover:text-blue-700 w-full text-center"
-            >
-              点击确认密码
-            </button>
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-sm text-center bg-red-50 py-2 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {isValid && (
-            <div className="flex items-center justify-center gap-2 text-green-600 bg-green-50 py-2 rounded-lg">
-              <Check className="w-4 h-4" />
-              <span className="text-sm">密码设置成功</span>
-            </div>
-          )}
+    <div className={`bg-white border border-neutral-200 ${className}`}>
+      {(title || subtitle) && (
+        <div className="px-6 py-4 border-b border-neutral-200">
+          {title && <h3 className="text-sm font-medium text-neutral-900">{title}</h3>}
+          {subtitle && <p className="text-xs text-neutral-500 mt-1">{subtitle}</p>}
         </div>
-      </div>
+      )}
+      <div className="p-6">{children}</div>
     </div>
   )
 }
 
-// ============================================================================
-// 时间段配置组件
-// ============================================================================
-function TimeSlotEditor({
-  slot,
+function Button({
+  children,
+  onClick,
+  variant = 'primary',
+  size = 'md',
+  disabled = false,
+  className = ''
+}: {
+  children: React.ReactNode
+  onClick?: () => void
+  variant?: 'primary' | 'secondary' | 'ghost'
+  size?: 'sm' | 'md'
+  disabled?: boolean
+  className?: string
+}) {
+  const baseStyles =
+    'inline-flex items-center justify-center font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed'
+  const variants = {
+    primary: 'bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-950',
+    secondary: 'bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100',
+    ghost: 'bg-transparent text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+  }
+  const sizes = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm'
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Input({
+  value,
   onChange,
-  onDelete
+  placeholder = '',
+  type = 'text',
+  disabled = false
 }: {
-  slot: TimeSlot
-  onChange: (slot: TimeSlot) => void
-  onDelete: () => void
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  type?: string
+  disabled?: boolean
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="time"
-        value={slot.start}
-        onChange={(e) => onChange({ ...slot, start: e.target.value })}
-        className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500"
-      />
-      <span className="text-gray-400">-</span>
-      <input
-        type="time"
-        value={slot.end}
-        onChange={(e) => onChange({ ...slot, end: e.target.value })}
-        className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500"
-      />
-      <button
-        onClick={onDelete}
-        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    </div>
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      disabled={disabled}
+      className="w-full px-3 py-2 bg-white border border-neutral-300 text-sm text-neutral-900
+        placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 disabled:bg-neutral-100 disabled:text-neutral-500"
+    />
   )
 }
 
-// ============================================================================
-// 步骤 3: 锁屏时段配置
-// ============================================================================
-function ScheduleStep({
-  schedule,
-  onChange
-}: {
-  schedule: WeeklySchedule
-  onChange: (s: WeeklySchedule) => void
-}) {
+export default function Setup() {
+  const [step, setStep] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [fixedPassword, setFixedPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [totpEnabled, setTotpEnabled] = useState(false)
+  const [totpSecret, setTotpSecret] = useState('')
+  const [totpDeviceName, setTotpDeviceName] = useState(generateDefaultTotpDeviceName())
+  const [isTotpDeviceConfirmed, setIsTotpDeviceConfirmed] = useState(false)
+  const [totpQrCodeDataUrl, setTotpQrCodeDataUrl] = useState('')
+  const [totpVisible, setTotpVisible] = useState(false)
+  const [totpLoading, setTotpLoading] = useState(false)
+  const [totpError, setTotpError] = useState('')
+
+  const [schedule, setSchedule] = useState<WeeklySchedule>(defaultSchedule())
   const [selectedDay, setSelectedDay] = useState<keyof WeeklySchedule>('monday')
 
+  const [style, setStyle] = useState<StyleConfig>(defaultStyle())
+
+  const passwordError = useMemo(() => {
+    if (!fixedPassword && !confirmPassword) return ''
+    if (!/^\d{6}$/.test(fixedPassword)) return '固定密码必须是6位数字'
+    if (confirmPassword && fixedPassword !== confirmPassword) return '两次输入的固定密码不一致'
+    return ''
+  }, [fixedPassword, confirmPassword])
+
+  const hasValidPassword = /^\d{6}$/.test(fixedPassword) && fixedPassword === confirmPassword
+
+  const hasAnyEnabledSchedule = Object.values(schedule).some((d) => d.enabled && d.slots.length > 0)
+  const normalizedTotpDeviceName = totpDeviceName.trim().toUpperCase()
+  const isTotpDeviceLocked = isTotpDeviceConfirmed || Boolean(totpSecret.trim())
+
+  const canProceed = () => {
+    if (step === 1) return hasValidPassword
+    if (step === 2) return !totpEnabled || (!!totpSecret && !!totpQrCodeDataUrl)
+    if (step === 3) return hasAnyEnabledSchedule
+    return true
+  }
+
+  const confirmTotpDeviceName = () => {
+    const normalized = normalizedTotpDeviceName
+    if (!normalized) {
+      setTotpError('设备标识名称不能为空')
+      return
+    }
+
+    if (isTotpDeviceLocked) {
+      return
+    }
+
+    const confirmed = window.confirm(`确认将设备标识锁定为“${normalized}”吗？锁定后不可更改。`)
+    if (!confirmed) return
+
+    setTotpDeviceName(normalized)
+    setIsTotpDeviceConfirmed(true)
+    setTotpError('')
+  }
+
+  const generateTotpBindingQr = async () => {
+    setTotpError('')
+
+    if (!isTotpDeviceConfirmed) {
+      setTotpError('请先确认设备标识名称，再进行扫码绑定')
+      return
+    }
+
+    setTotpLoading(true)
+    try {
+      const existingSecret = totpSecret.trim()
+
+      if (existingSecret) {
+        const normalizedDeviceName = totpDeviceName.trim().toUpperCase()
+        const otpauthUrl = `otpauth://totp/${encodeURIComponent(`LockIt - ${normalizedDeviceName}`)}?secret=${encodeURIComponent(existingSecret)}&issuer=${encodeURIComponent('LockIt')}`
+        const qrcode = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 })
+        setTotpDeviceName(normalizedDeviceName)
+        setTotpQrCodeDataUrl(qrcode)
+      } else {
+        const { secret, otpauthUrl, deviceName } = await window.api.generateTOTPSecret(totpDeviceName)
+        const qrcode = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 })
+
+        setTotpSecret(secret)
+        setTotpDeviceName(deviceName)
+        setTotpQrCodeDataUrl(qrcode)
+      }
+    } catch (e) {
+      console.error('Generate TOTP secret failed:', e)
+      setTotpError('生成 TOTP 密钥失败，请重试')
+    } finally {
+      setTotpLoading(false)
+    }
+  }
+
+  const handleToggleTotp = async (enabled: boolean) => {
+    setTotpEnabled(enabled)
+    if (!enabled) {
+      setTotpSecret('')
+      setTotpQrCodeDataUrl('')
+      setIsTotpDeviceConfirmed(false)
+      setTotpError('')
+    }
+  }
+
   const updateDaySchedule = (day: keyof WeeklySchedule, updates: Partial<DaySchedule>) => {
-    onChange({
-      ...schedule,
-      [day]: { ...schedule[day], ...updates }
-    })
+    setSchedule((prev) => ({ ...prev, [day]: { ...prev[day], ...updates } }))
   }
 
   const addSlot = (day: keyof WeeklySchedule) => {
-    const currentSlots = schedule[day]?.slots ?? []
-    const newSlot: TimeSlot = { start: '09:00', end: '18:00' }
-    updateDaySchedule(day, { slots: [...currentSlots, newSlot] })
+    const slots = schedule[day]?.slots ?? []
+    updateDaySchedule(day, { slots: [...slots, { start: '09:00', end: '18:00' }] })
   }
 
   const updateSlot = (day: keyof WeeklySchedule, index: number, slot: TimeSlot) => {
-    const newSlots = [...(schedule[day]?.slots ?? [])]
-    newSlots[index] = slot
-    updateDaySchedule(day, { slots: newSlots })
+    const slots = [...(schedule[day]?.slots ?? [])]
+    slots[index] = slot
+    updateDaySchedule(day, { slots })
   }
 
   const deleteSlot = (day: keyof WeeklySchedule, index: number) => {
-    const newSlots = (schedule[day]?.slots ?? []).filter((_, i) => i !== index)
-    updateDaySchedule(day, { slots: newSlots })
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-medium text-gray-800 mb-1">配置锁屏时段</h2>
-        <p className="text-gray-500 text-sm">选择日期并设置当天的锁屏时间段</p>
-      </div>
-
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* 左侧：星期选择 */}
-        <div className="w-40 flex flex-col gap-1">
-          {dayNames.map(({ key, label, short }) => {
-            const daySchedule = schedule[key]
-            const isEnabled = daySchedule?.enabled ?? false
-            const slotCount = daySchedule?.slots?.length ?? 0
-            const isSelected = selectedDay === key
-
-            return (
-              <button
-                key={key}
-                onClick={() => setSelectedDay(key)}
-                className={`flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${
-                  isSelected
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium ${
-                      isSelected
-                        ? 'bg-white/20'
-                        : isEnabled
-                          ? 'bg-green-100 text-green-600'
-                          : 'bg-gray-200 text-gray-500'
-                    }`}
-                  >
-                    {short}
-                  </span>
-                  <span>{label}</span>
-                </div>
-                {isEnabled && slotCount > 0 && (
-                  <span
-                    className={`text-xs px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-blue-100 text-blue-600'}`}
-                  >
-                    {slotCount}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* 右侧：时段配置 */}
-        <div className="flex-1 bg-gray-50 rounded-lg p-4 overflow-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h3 className="font-medium text-gray-800">
-                {dayNames.find((d) => d.key === selectedDay)?.label}
-              </h3>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={schedule[selectedDay]?.enabled ?? false}
-                  onChange={(e) => updateDaySchedule(selectedDay, { enabled: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-600">启用</span>
-              </label>
-            </div>
-            {(schedule[selectedDay]?.enabled ?? false) && (
-              <button
-                onClick={() => addSlot(selectedDay)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                添加
-              </button>
-            )}
-          </div>
-
-          {(schedule[selectedDay]?.enabled ?? false) ? (
-            <div className="space-y-2">
-              {(schedule[selectedDay]?.slots ?? []).length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">
-                  <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>暂无时段</p>
-                  <button
-                    onClick={() => addSlot(selectedDay)}
-                    className="mt-2 text-blue-600 hover:text-blue-700"
-                  >
-                    添加时段
-                  </button>
-                </div>
-              ) : (
-                (schedule[selectedDay]?.slots ?? []).map((slot, index) => (
-                  <TimeSlotEditor
-                    key={index}
-                    slot={slot}
-                    onChange={(s) => updateSlot(selectedDay, index, s)}
-                    onDelete={() => deleteSlot(selectedDay, index)}
-                  />
-                ))
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-400 text-sm">
-              <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>该日期未启用锁屏</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// 步骤 4: 样式设置
-// ============================================================================
-function StyleStep({
-  style,
-  onChange
-}: {
-  style: StyleConfig
-  onChange: (s: StyleConfig) => void
-}) {
-  return (
-    <div className="flex flex-col h-full">
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-medium text-gray-800 mb-1">自定义锁屏样式</h2>
-        <p className="text-gray-500 text-sm">设置锁屏界面的外观和文字</p>
-      </div>
-
-      <div className="flex-1 overflow-auto space-y-4">
-        {/* 主题模式 */}
-        <div>
-          <label className="block text-sm text-gray-600 mb-2">主题模式</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onChange({ ...style, themeMode: 'light' })}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
-                style.themeMode === 'light'
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <Sun className="w-4 h-4" />
-              浅色
-            </button>
-            <button
-              onClick={() => onChange({ ...style, themeMode: 'dark' })}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
-                style.themeMode === 'dark'
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <Moon className="w-4 h-4" />
-              深色
-            </button>
-            <button
-              onClick={() => onChange({ ...style, themeMode: 'system' })}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
-                style.themeMode === 'system'
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <Monitor className="w-4 h-4" />
-              跟随系统
-            </button>
-          </div>
-        </div>
-
-        {/* 颜色 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">背景色</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={style.backgroundColor}
-                onChange={(e) => onChange({ ...style, backgroundColor: e.target.value })}
-                className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={style.backgroundColor}
-                onChange={(e) => onChange({ ...style, backgroundColor: e.target.value })}
-                className="flex-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">文字色</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={style.textColor}
-                onChange={(e) => onChange({ ...style, textColor: e.target.value })}
-                className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={style.textColor}
-                onChange={(e) => onChange({ ...style, textColor: e.target.value })}
-                className="flex-1 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 文字内容 */}
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">主标题</label>
-            <input
-              type="text"
-              value={style.centerText}
-              onChange={(e) => onChange({ ...style, centerText: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">副标题</label>
-            <input
-              type="text"
-              value={style.subText}
-              onChange={(e) => onChange({ ...style, subText: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">左下角文字</label>
-              <input
-                type="text"
-                value={style.bottomLeftText}
-                onChange={(e) => onChange({ ...style, bottomLeftText: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">右下角文字</label>
-              <input
-                type="text"
-                value={style.bottomRightText}
-                onChange={(e) => onChange({ ...style, bottomRightText: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 预览 */}
-        <div>
-          <label className="block text-sm text-gray-600 mb-2">预览</label>
-          <div
-            className="rounded-lg p-4 text-center"
-            style={{ backgroundColor: style.backgroundColor, color: style.textColor }}
-          >
-            <div className="text-base font-medium">{style.centerText || '主标题'}</div>
-            <div className="text-sm mt-1 opacity-80">{style.subText || '副标题'}</div>
-            <div className="flex justify-between mt-4 text-xs opacity-60">
-              <span>{style.bottomLeftText}</span>
-              <span>{style.bottomRightText}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// 步骤 5: 完成
-// ============================================================================
-function CompleteStep({ onComplete }: { onComplete: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full text-center">
-      <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-6">
-        <Check className="w-8 h-8 text-white" />
-      </div>
-      <h2 className="text-2xl font-medium text-gray-800 mb-3">配置完成！</h2>
-      <p className="text-gray-600 mb-8 max-w-sm text-sm">
-        Lock It 将在后台运行，在配置的时段自动锁定屏幕。
-      </p>
-      <button
-        onClick={onComplete}
-        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-      >
-        开始使用
-      </button>
-    </div>
-  )
-}
-
-// ============================================================================
-// 主组件
-// ============================================================================
-export default function Setup() {
-  const [step, setStep] = useState(0)
-  const [password, setPassword] = useState('')
-  const [schedule, setSchedule] = useState<WeeklySchedule>(defaultSchedule())
-  const [style, setStyle] = useState<StyleConfig>({
-    themeMode: 'dark',
-    centerText: '此计算机因违规外联已被阻断',
-    subText: '请等待安全部门与你联系',
-    bottomLeftText: '保密委员会办公室',
-    bottomRightText: '',
-    backgroundColor: '#0066cc',
-    textColor: '#ffffff',
-    timePosition: 'hidden',
-    timeFormat: 'HH:mm:ss',
-    closeScreenPrompt: '请关闭班级大屏后再继续操作'
-  })
-  const [isLoading, setIsLoading] = useState(false)
-
-  const steps = [
-    { title: '欢迎', component: WelcomeStep },
-    { title: '密码', component: PasswordStep },
-    { title: '时段', component: ScheduleStep },
-    { title: '样式', component: StyleStep },
-    { title: '完成', component: CompleteStep }
-  ]
-
-  const canProceed = () => {
-    switch (step) {
-      case 1:
-        return password.length === 6
-      case 2:
-        return Object.values(schedule).some((day) => day.enabled && day.slots.length > 0)
-      default:
-        return true
-    }
+    const slots = (schedule[day]?.slots ?? []).filter((_, i) => i !== index)
+    updateDaySchedule(day, { slots })
   }
 
   const handleComplete = async () => {
-    setIsLoading(true)
+    setIsSaving(true)
     try {
       await window.api.saveConfig({
-        password: { type: 'fixed', fixedPassword: password },
+        password: {
+          type: totpEnabled && totpSecret ? 'both' : 'fixed',
+          fixedPassword,
+          totpSecret: totpEnabled && totpSecret ? totpSecret : undefined,
+          totpDeviceName: totpEnabled && totpSecret ? totpDeviceName : undefined
+        },
         schedule,
         style
       })
       await window.api.completeSetup()
-    } catch (error) {
-      console.error('Setup failed:', error)
-      alert('配置保存失败，请重试')
+    } catch (e) {
+      console.error('Setup failed:', e)
+      alert('保存配置失败，请重试')
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
+  const steps = ['欢迎', '固定密码', '可选TOTP', '锁屏时段', '界面样式', '完成']
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-lg overflow-hidden">
-        <div className="p-6">
-          {/* 步骤指示器 */}
-          <StepIndicator currentStep={step} totalSteps={steps.length} />
-
-          {/* 步骤内容 */}
-          <div className="h-[400px]">
-            {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
-            {step === 1 && <PasswordStep password={password} onChange={setPassword} />}
-            {step === 2 && <ScheduleStep schedule={schedule} onChange={setSchedule} />}
-            {step === 3 && <StyleStep style={style} onChange={setStyle} />}
-            {step === 4 && <CompleteStep onComplete={handleComplete} />}
+    <div className="h-dvh bg-neutral-50 text-neutral-900 flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl bg-white border border-neutral-200">
+        <header className="h-14 px-6 border-b border-neutral-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-neutral-900" />
+            <h1 className="text-sm font-medium">首次配置向导</h1>
           </div>
+          <span className="text-xs text-neutral-500">
+            第 {step + 1} / {steps.length} 步
+          </span>
+        </header>
 
-          {/* 导航按钮 */}
-          {step > 0 && step < 4 && (
-            <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
-              <button
-                onClick={() => setStep(step - 1)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium flex items-center gap-1 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                上一步
-              </button>
-              <button
-                onClick={() => setStep(step + 1)}
-                disabled={!canProceed()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
-              >
-                下一步
-                <ChevronRight className="w-4 h-4" />
-              </button>
+        <div className="px-6 py-4 border-b border-neutral-200 flex gap-1">
+          {steps.map((name, index) => (
+            <div key={name} className="flex-1">
+              <div
+                className={`h-1 ${index <= step ? 'bg-neutral-900' : 'bg-neutral-200'}`}
+              />
+              <p className="text-[11px] text-neutral-500 mt-1 truncate">{name}</p>
             </div>
-          )}
+          ))}
         </div>
+
+        <main className="p-6 min-h-[460px]">
+          {step === 0 && (
+            <Card title="欢迎" subtitle="完成以下步骤即可开始使用">
+              <div className="space-y-3 text-sm text-neutral-700">
+                <p>• 必须设置固定密码（6位数字）</p>
+                <p>• 可选配置 TOTP 动态密码，增强安全性</p>
+                <p>• 设置锁屏时段与锁屏界面文案</p>
+              </div>
+            </Card>
+          )}
+
+          {step === 1 && (
+            <Card title="固定密码（必填）" subtitle="固定密码是必选项，后续可叠加 TOTP">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1.5">固定密码</label>
+                  <Input value={fixedPassword} onChange={setFixedPassword} placeholder="输入6位数字" type="password" />
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1.5">确认固定密码</label>
+                  <Input value={confirmPassword} onChange={setConfirmPassword} placeholder="再次输入6位数字" type="password" />
+                </div>
+              </div>
+              {passwordError && <p className="text-xs text-red-600 mt-3">{passwordError}</p>}
+              {!passwordError && hasValidPassword && (
+                <p className="text-xs text-green-600 mt-3">固定密码设置完成</p>
+              )}
+            </Card>
+          )}
+
+          {step === 2 && (
+            <Card title="TOTP 动态密码（可选）" subtitle="开启后可通过固定密码或 TOTP 任一方式解锁">
+              <div className="space-y-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={totpEnabled}
+                    onChange={(e) => void handleToggleTotp(e.target.checked)}
+                  />
+                  启用 TOTP 动态密码
+                </label>
+
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1.5">设备标识名称</label>
+                  <Input
+                    value={totpDeviceName}
+                    onChange={(v) => {
+                      if (isTotpDeviceLocked) return
+                      setTotpDeviceName(v)
+                      setIsTotpDeviceConfirmed(false)
+                      setTotpQrCodeDataUrl('')
+                      setTotpError('')
+                    }}
+                    placeholder="例如 A1B2"
+                    disabled={isTotpDeviceLocked}
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={confirmTotpDeviceName}
+                    disabled={!totpEnabled || totpLoading || isTotpDeviceLocked}
+                  >
+                    {isTotpDeviceLocked ? '设备标识已锁定' : '确认设备标识'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void generateTotpBindingQr()}
+                    disabled={!totpEnabled || totpLoading || !isTotpDeviceConfirmed}
+                  >
+                    扫码绑定
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setTotpVisible((v) => !v)}
+                    disabled={!totpEnabled || !totpSecret}
+                  >
+                    {totpVisible ? '隐藏密钥' : '显示密钥'}
+                  </Button>
+                </div>
+
+                {totpLoading && <p className="text-xs text-neutral-500">正在生成密钥...</p>}
+                {totpError && <p className="text-xs text-red-600">{totpError}</p>}
+
+                {isTotpDeviceConfirmed && (
+                  <p className="text-xs text-neutral-500">当前设备名称：LockIt - {totpDeviceName}</p>
+                )}
+
+                {totpEnabled && (
+                  <div className="p-3 bg-neutral-50 border border-neutral-200">
+                    <p className="text-xs text-neutral-500 mb-1">TOTP 密钥</p>
+                    <p className="text-sm font-mono break-all">
+                      {totpSecret ? (totpVisible ? totpSecret : '••••••••••••••••••••••••••••••••') : '尚未生成'}
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-2">可在认证器应用中手动添加该密钥</p>
+                  </div>
+                )}
+
+                {totpQrCodeDataUrl && (
+                  <div className="p-3 bg-neutral-50 border border-neutral-200 inline-block">
+                    <p className="text-xs text-neutral-500 mb-2">请使用认证器应用扫码</p>
+                    <img src={totpQrCodeDataUrl} alt="TOTP 绑定二维码" className="w-56 h-56" />
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {step === 3 && (
+            <Card title="锁屏时段" subtitle="至少启用一个日期并添加时段">
+              <div className="grid grid-cols-[220px_1fr] gap-4">
+                <div className="space-y-1">
+                  {dayNames.map(({ key, label, short }) => {
+                    const isSelected = key === selectedDay
+                    const enabled = schedule[key].enabled
+                    const count = schedule[key].slots.length
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedDay(key)}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-sm border ${
+                          isSelected ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white border-neutral-200'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{short}</span>
+                          <span>{label}</span>
+                        </span>
+                        <span className={`text-xs ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}>
+                          {enabled ? count : '关'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={schedule[selectedDay].enabled}
+                        onChange={(e) => updateDaySchedule(selectedDay, { enabled: e.target.checked })}
+                      />
+                      启用 {dayNames.find((d) => d.key === selectedDay)?.label}
+                    </label>
+                    {schedule[selectedDay].enabled && (
+                      <Button size="sm" onClick={() => addSlot(selectedDay)}>
+                        <Calendar className="w-4 h-4 mr-1" />
+                        添加时段
+                      </Button>
+                    )}
+                  </div>
+
+                  {schedule[selectedDay].enabled ? (
+                    <div className="space-y-2">
+                      {schedule[selectedDay].slots.length === 0 ? (
+                        <p className="text-xs text-neutral-500">暂无时段，请添加至少一个时段</p>
+                      ) : (
+                        schedule[selectedDay].slots.map((slot, index) => (
+                          <div key={`${selectedDay}-${index}`} className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={slot.start}
+                              onChange={(e) =>
+                                updateSlot(selectedDay, index, { ...slot, start: e.target.value })
+                              }
+                              className="px-2 py-1.5 border border-neutral-300 text-sm"
+                            />
+                            <span className="text-neutral-400">—</span>
+                            <input
+                              type="time"
+                              value={slot.end}
+                              onChange={(e) =>
+                                updateSlot(selectedDay, index, { ...slot, end: e.target.value })
+                              }
+                              className="px-2 py-1.5 border border-neutral-300 text-sm"
+                            />
+                            <Button variant="ghost" size="sm" onClick={() => deleteSlot(selectedDay, index)}>
+                              删除
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-neutral-500">当前日期未启用锁屏</p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {step === 4 && (
+            <Card title="界面样式" subtitle="与设置页字段保持一致，可在设置页继续精细调整">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">主标题</label>
+                    <Input value={style.centerText} onChange={(v) => setStyle((s) => ({ ...s, centerText: v }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">副标题</label>
+                    <Input value={style.subText} onChange={(v) => setStyle((s) => ({ ...s, subText: v }))} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">左下角文字</label>
+                    <Input
+                      value={style.bottomLeftText}
+                      onChange={(v) => setStyle((s) => ({ ...s, bottomLeftText: v }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">右下角文字</label>
+                    <Input
+                      value={style.bottomRightText}
+                      onChange={(v) => setStyle((s) => ({ ...s, bottomRightText: v }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">背景色</label>
+                    <Input
+                      value={style.backgroundColor}
+                      onChange={(v) => setStyle((s) => ({ ...s, backgroundColor: v }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-neutral-600 mb-1.5">文字色</label>
+                    <Input value={style.textColor} onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))} />
+                  </div>
+                </div>
+
+                <div className="p-6" style={{ backgroundColor: style.backgroundColor, color: style.textColor }}>
+                  <p className="text-2xl font-medium text-center whitespace-pre-line">{style.centerText}</p>
+                  <p className="text-lg mt-2 text-center whitespace-pre-line opacity-90">{style.subText}</p>
+                  <div className="grid grid-cols-2 gap-2 mt-6 text-sm opacity-70">
+                    <span className="whitespace-pre-line">{style.bottomLeftText}</span>
+                    <span className="text-right whitespace-pre-line">{style.bottomRightText}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {step === 5 && (
+            <Card title="配置完成" subtitle="点击下方按钮保存并进入设置页面">
+              <div className="text-sm text-neutral-700 space-y-2">
+                <p>固定密码：已配置</p>
+                <p>TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}</p>
+                <p>锁屏时段：已配置</p>
+                <p>界面样式：已配置</p>
+              </div>
+            </Card>
+          )}
+        </main>
+
+        <footer className="px-6 py-4 border-t border-neutral-200 flex items-center justify-between">
+          <Button variant="ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || isSaving}>
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            上一步
+          </Button>
+
+          {step < steps.length - 1 ? (
+            <Button onClick={() => setStep((s) => s + 1)} disabled={!canProceed() || isSaving}>
+              下一步
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          ) : (
+            <Button onClick={() => void handleComplete()} disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  保存中
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-1" />
+                  完成并进入设置
+                </>
+              )}
+            </Button>
+          )}
+        </footer>
       </div>
 
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 flex flex-col items-center">
-            <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-gray-600 text-sm">正在保存配置...</p>
+      {isSaving && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+          <div className="bg-white border border-neutral-200 px-6 py-4 text-sm text-neutral-700 flex items-center gap-2">
+            <KeyRound className="w-4 h-4" />
+            正在保存配置并初始化...
           </div>
         </div>
       )}

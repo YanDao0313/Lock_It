@@ -30,6 +30,7 @@
     "electron-updater": "^6.3.9",
     "lucide-react": "^0.564.0",
     "otplib": "^13.3.0",
+    "qrcode": "^1.5.4",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {

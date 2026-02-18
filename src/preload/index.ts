@@ -30,6 +30,18 @@ export interface FontSizeConfig {
   timeText: number
 }
 
+export interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+export interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 export interface StyleConfig {
   themeMode: 'light' | 'dark' | 'system' | 'custom'
   themeName?: string
@@ -45,6 +57,8 @@ export interface StyleConfig {
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 export interface UnlockRecord {
@@ -52,6 +66,7 @@ export interface UnlockRecord {
   timestamp: number
   success: boolean
   attemptCount: number
+  unlockMethod?: 'fixed' | 'totp'
   photoData?: string
   photoPath?: string
   error?: string
@@ -66,6 +81,7 @@ export interface PasswordConfig {
   type: 'fixed' | 'totp' | 'both'
   fixedPassword?: string
   totpSecret?: string
+  totpDeviceName?: string
 }
 
 // ============================================================================
@@ -93,9 +109,11 @@ export interface API {
 
   // 密码验证
   verifyPassword: (password: string) => Promise<boolean>
+  verifyPasswordWithMethod: (password: string) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
+  verifySettingsPassword: (password: string) => Promise<boolean>
 
   // TOTP
-  generateTOTPSecret: () => Promise<{ secret: string; otpauthUrl: string }>
+  generateTOTPSecret: (deviceName?: string) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
 
   // 完成设置
   completeSetup: () => Promise<boolean>
@@ -111,6 +129,7 @@ export interface API {
     timestamp: number
     success: boolean
     attemptCount: number
+    unlockMethod?: 'fixed' | 'totp'
     photoData?: string
     error?: string
   }) => Promise<boolean>
@@ -122,7 +141,7 @@ export interface API {
   deleteUnlockRecord: (id: string) => Promise<boolean>
 
   // 清空所有解锁记录
-  clearUnlockRecords: () => Promise<boolean>
+  clearUnlockRecords: (password: string) => Promise<boolean>
 
   // 获取相机列表
   getCameras: () => Promise<CameraDevice[]>
@@ -132,6 +151,15 @@ export interface API {
 
   // 设置选中的相机
   setSelectedCamera: (deviceId: string) => Promise<boolean>
+
+  // 设置页面未保存状态
+  setSettingsDirty: (dirty: boolean) => Promise<boolean>
+
+  // 设置窗口关闭请求
+  onSettingsCloseAttempt: (callback: () => void) => void
+
+  // 设置窗口关闭结果
+  respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
 }
 
 // ============================================================================
@@ -149,9 +177,13 @@ contextBridge.exposeInMainWorld('api', {
 
   // 密码验证
   verifyPassword: (password: string) => ipcRenderer.invoke('verify-password', password),
+  verifyPasswordWithMethod: (password: string) =>
+    ipcRenderer.invoke('verify-password-with-method', password),
+  verifySettingsPassword: (password: string) =>
+    ipcRenderer.invoke('verify-settings-password', password),
 
   // TOTP
-  generateTOTPSecret: () => ipcRenderer.invoke('generate-totp-secret'),
+  generateTOTPSecret: (deviceName?: string) => ipcRenderer.invoke('generate-totp-secret', deviceName),
 
   // 完成设置
   completeSetup: () => ipcRenderer.invoke('complete-setup'),
@@ -172,7 +204,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteUnlockRecord: (id: string) => ipcRenderer.invoke('delete-unlock-record', id),
 
   // 清空所有解锁记录
-  clearUnlockRecords: () => ipcRenderer.invoke('clear-unlock-records'),
+  clearUnlockRecords: (password: string) => ipcRenderer.invoke('clear-unlock-records', password),
 
   // 获取相机列表
   getCameras: () => ipcRenderer.invoke('get-cameras'),
@@ -181,7 +213,19 @@ contextBridge.exposeInMainWorld('api', {
   getSelectedCamera: () => ipcRenderer.invoke('get-selected-camera'),
 
   // 设置选中的相机
-  setSelectedCamera: (deviceId: string) => ipcRenderer.invoke('set-selected-camera', deviceId)
+  setSelectedCamera: (deviceId: string) => ipcRenderer.invoke('set-selected-camera', deviceId),
+
+  // 设置页面未保存状态
+  setSettingsDirty: (dirty: boolean) => ipcRenderer.invoke('set-settings-dirty', dirty),
+
+  // 设置窗口关闭请求
+  onSettingsCloseAttempt: (callback: () => void) => {
+    ipcRenderer.on('settings-close-attempt', () => callback())
+  },
+
+  // 设置窗口关闭结果
+  respondSettingsClose: (result: 'proceed' | 'cancel') =>
+    ipcRenderer.invoke('settings-close-response', result)
 } as API)
 
 // 类型声明

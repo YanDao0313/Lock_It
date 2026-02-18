@@ -42,6 +42,18 @@ interface FontSizeConfig {
   timeText: number
 }
 
+interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 interface StyleConfig {
   themeMode: 'light' | 'dark' | 'system' | 'custom'
   themeName?: string
@@ -57,12 +69,15 @@ interface StyleConfig {
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 interface PasswordConfig {
   type: 'fixed' | 'totp' | 'both'
   fixedPassword?: string
   totpSecret?: string
+  totpDeviceName?: string
 }
 
 interface AppConfig {
@@ -78,9 +93,20 @@ interface UnlockRecord {
   timestamp: number
   success: boolean
   attemptCount: number
+  unlockMethod?: 'fixed' | 'totp'
   photoData?: string
   photoPath?: string
   error?: string
+}
+
+type TOTPModule = {
+  generateSecret: () => string
+  verifySync: (params: { token: string; secret: string }) => boolean | { valid?: boolean } | undefined
+}
+
+type PasswordVerifyResult = {
+  success: boolean
+  method?: 'fixed' | 'totp'
 }
 
 // ============================================================================
@@ -90,11 +116,14 @@ let mainWindow: BrowserWindow | null = null
 let lockWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let store: any = null
-let totpModule: any = null
+let totpModule: TOTPModule | null = null
 let checkInterval: NodeJS.Timeout | null = null
 let isLocked = false
 let isQuitting = false
 let autoLockEnabled = true // 解锁后设为false，停止自动锁屏
+let settingsDirty = false
+let isHandlingMainClose = false
+let pendingSettingsCloseResolver: ((result: 'proceed' | 'cancel') => void) | null = null
 
 // 默认配置
 const defaultSchedule = (): WeeklySchedule => ({
@@ -114,11 +143,23 @@ const defaultFontSizes = (): FontSizeConfig => ({
   timeText: 20
 })
 
+const defaultTextAligns = (): TextAlignConfig => ({
+  centerText: 'center',
+  subText: 'center',
+  bottomText: 'center'
+})
+
+const defaultFontWeights = (): FontWeightConfig => ({
+  centerText: 'medium',
+  subText: 'normal',
+  bottomText: 'normal'
+})
+
 const defaultStyle = (): StyleConfig => ({
   themeMode: 'dark',
   centerText: '此计算机因违规外联已被阻断',
   subText: '请等待安全部门与你联系',
-  bottomLeftText: '保密委员会办公室',
+  bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
   bottomRightText: '',
   backgroundColor: '#0066cc',
   textColor: '#ffffff',
@@ -127,8 +168,32 @@ const defaultStyle = (): StyleConfig => ({
   timePosition: 'hidden',
   timeFormat: 'HH:mm:ss',
   closeScreenPrompt: '请关闭班级大屏后再继续操作',
-  fontSizes: defaultFontSizes()
+  fontSizes: defaultFontSizes(),
+  textAligns: defaultTextAligns(),
+  fontWeights: defaultFontWeights()
 })
+
+function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
+  const defaults = defaultStyle()
+  const source = style || {}
+
+  return {
+    ...defaults,
+    ...source,
+    fontSizes: {
+      ...defaults.fontSizes,
+      ...(source.fontSizes || {})
+    },
+    textAligns: {
+      ...defaults.textAligns,
+      ...(source.textAligns || {})
+    },
+    fontWeights: {
+      ...defaults.fontWeights,
+      ...(source.fontWeights || {})
+    }
+  }
+}
 
 // 获取实际使用的颜色（根据主题模式，提供默认值）
 function getThemeColors(style: StyleConfig) {
@@ -178,7 +243,77 @@ async function initModules(): Promise<void> {
   })
 
   const otplib = await import('otplib')
-  totpModule = otplib.TOTP
+  const moduleAny = otplib as any
+
+  if (
+    typeof moduleAny.generateSecret === 'function' &&
+    typeof moduleAny.verifySync === 'function'
+  ) {
+    totpModule = {
+      generateSecret: () => moduleAny.generateSecret(),
+      verifySync: ({ token, secret }) => moduleAny.verifySync({ token, secret })
+    }
+    return
+  }
+
+  const authenticator = moduleAny.authenticator || moduleAny.default?.authenticator
+  if (authenticator) {
+    totpModule = {
+      generateSecret: () => authenticator.generateSecret(),
+      verifySync: ({ token, secret }) => authenticator.verify({ token, secret })
+    }
+    return
+  }
+
+  throw new Error('Failed to initialize otplib authenticator module')
+}
+
+function normalizePasswordConfig(password?: PasswordConfig): PasswordConfig {
+  const source = password || { type: 'fixed', fixedPassword: '123456' }
+  const fixedPassword = source.fixedPassword && /^\d{6}$/.test(source.fixedPassword)
+    ? source.fixedPassword
+    : '123456'
+  const totpDeviceName = normalizeTotpDeviceName(source.totpDeviceName)
+
+  if (source.type === 'both') {
+    return {
+      type: 'both',
+      fixedPassword,
+      totpSecret: source.totpSecret,
+      totpDeviceName
+    }
+  }
+
+  return {
+    type: 'fixed',
+    fixedPassword,
+    totpSecret: source.totpSecret,
+    totpDeviceName
+  }
+}
+
+function generateDefaultTotpDeviceName(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let result = ''
+  for (let i = 0; i < 4; i += 1) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+function normalizeTotpDeviceName(name?: string): string {
+  const trimmed = (name || '').trim()
+  return trimmed || generateDefaultTotpDeviceName()
+}
+
+function navigateMainWindowTo(pageHash: 'setup' | 'settings'): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${pageHash}`)
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: pageHash })
+  }
 }
 
 // ============================================================================
@@ -198,31 +333,40 @@ function createMainWindow(): BrowserWindow {
     show: false,
     title: 'Lock It - 设置',
     icon: join(__dirname, '../../resources/icon.png'),
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
 
+  mainWindow.removeMenu()
+  mainWindow.setMenuBarVisibility(false)
+
   // 根据是否首次启动显示不同页面
   const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
   const pageHash = hasCompletedSetup ? 'settings' : 'setup'
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${pageHash}`)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: pageHash })
-  }
+  navigateMainWindowTo(pageHash as 'setup' | 'settings')
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
   })
 
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      mainWindow?.hide()
-    }
+    if (isQuitting) return
+
+    event.preventDefault()
+    if (isHandlingMainClose) return
+
+    isHandlingMainClose = true
+    void (async () => {
+      const decision = await requestSettingsCloseDecision()
+      if (decision === 'proceed') {
+        mainWindow?.hide()
+      }
+      isHandlingMainClose = false
+    })()
   })
 
   mainWindow.on('closed', () => {
@@ -230,6 +374,33 @@ function createMainWindow(): BrowserWindow {
   })
 
   return mainWindow
+}
+
+function requestSettingsCloseDecision(): Promise<'proceed' | 'cancel'> {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return Promise.resolve('proceed')
+  }
+
+  if (!settingsDirty) {
+    return Promise.resolve('proceed')
+  }
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      if (pendingSettingsCloseResolver) {
+        pendingSettingsCloseResolver = null
+        resolve('cancel')
+      }
+    }, 30000)
+
+    pendingSettingsCloseResolver = (result) => {
+      clearTimeout(timeout)
+      pendingSettingsCloseResolver = null
+      resolve(result)
+    }
+
+    mainWindow?.webContents.send('settings-close-attempt')
+  })
 }
 
 // 要阻止的系统快捷键列表
@@ -401,6 +572,20 @@ function closeLockWindow(): void {
   updateTrayMenu()
 }
 
+function registerProductionShortcutGuards(window: BrowserWindow): void {
+  window.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase()
+    const isFunctionDevKey = key === 'f12'
+    const isDevToolsCombo =
+      (input.control || input.meta) && input.shift && (key === 'i' || key === 'j' || key === 'c')
+    const isReloadCombo = (input.control || input.meta) && (key === 'r' || key === 'f5')
+
+    if (isFunctionDevKey || isDevToolsCombo || isReloadCombo) {
+      event.preventDefault()
+    }
+  })
+}
+
 // ============================================================================
 // 系统托盘
 // ============================================================================
@@ -424,6 +609,7 @@ function updateTrayMenu(): void {
         if (!mainWindow || mainWindow.isDestroyed()) {
           createMainWindow()
         } else {
+          navigateMainWindowTo('settings')
           mainWindow.show()
           mainWindow.focus()
         }
@@ -536,19 +722,63 @@ function startScheduleChecker(): void {
   checkSchedule() // 立即检查一次
 }
 
+function verifyPasswordAgainstConfig(inputPassword: string): PasswordVerifyResult {
+  const pwdConfig = normalizePasswordConfig(store.get('password') as PasswordConfig)
+
+  if ((pwdConfig.type === 'fixed' || pwdConfig.type === 'both') && inputPassword === pwdConfig.fixedPassword) {
+    return { success: true, method: 'fixed' }
+  }
+
+  if ((pwdConfig.type === 'totp' || pwdConfig.type === 'both') && pwdConfig.totpSecret) {
+    try {
+      if (!totpModule) {
+        console.error('TOTP module not initialized')
+        return { success: false }
+      }
+
+      const verifyResult = totpModule.verifySync({
+        token: inputPassword,
+        secret: pwdConfig.totpSecret
+      })
+      const isValid =
+        typeof verifyResult === 'boolean'
+          ? verifyResult
+          : Boolean((verifyResult as { valid?: boolean } | undefined)?.valid)
+
+      if (isValid) {
+        return { success: true, method: 'totp' }
+      }
+    } catch (e) {
+      console.error('TOTP verification error:', e)
+    }
+  }
+
+  return { success: false }
+}
+
 // ============================================================================
 // IPC 处理
 // ============================================================================
 function setupIpcHandlers(): void {
+  ipcMain.handle('set-settings-dirty', (_, dirty: boolean) => {
+    settingsDirty = !!dirty
+    return true
+  })
+
+  ipcMain.handle('settings-close-response', (_, result: 'proceed' | 'cancel') => {
+    if (pendingSettingsCloseResolver) {
+      pendingSettingsCloseResolver(result)
+    }
+    return true
+  })
+
   // 获取配置
   ipcMain.handle('get-config', () => {
-    const style = store.get('style') as StyleConfig
-    // 确保 fontSizes 存在
-    if (!style.fontSizes) {
-      style.fontSizes = defaultFontSizes()
-    }
+    const style = normalizeStyle(store.get('style') as Partial<StyleConfig>)
+    const password = normalizePasswordConfig(store.get('password') as PasswordConfig)
+    store.set('password', password)
     return {
-      password: store.get('password'),
+      password,
       schedule: store.get('schedule'),
       style: style,
       selectedCamera: store.get('selectedCamera')
@@ -557,20 +787,35 @@ function setupIpcHandlers(): void {
 
   // 保存配置
   ipcMain.handle('set-config', (_, config: Partial<AppConfig>) => {
-    if (config.password) store.set('password', config.password)
+    if (config.password) store.set('password', normalizePasswordConfig(config.password))
     if (config.schedule) store.set('schedule', config.schedule)
-    if (config.style) store.set('style', config.style)
+    if (config.style) {
+      const currentStyle = normalizeStyle(store.get('style') as Partial<StyleConfig>)
+      const mergedStyle = normalizeStyle({
+        ...currentStyle,
+        ...config.style,
+        fontSizes: {
+          ...currentStyle.fontSizes,
+          ...(config.style.fontSizes || {})
+        },
+        textAligns: {
+          ...currentStyle.textAligns,
+          ...(config.style.textAligns || {})
+        },
+        fontWeights: {
+          ...currentStyle.fontWeights,
+          ...(config.style.fontWeights || {})
+        }
+      })
+      store.set('style', mergedStyle)
+    }
     if (config.selectedCamera !== undefined) store.set('selectedCamera', config.selectedCamera)
     return true
   })
 
   // 获取样式（给锁屏界面用）
   ipcMain.handle('get-style', () => {
-    const style = store.get('style') as StyleConfig
-    // 确保 fontSizes 存在
-    if (!style.fontSizes) {
-      style.fontSizes = defaultFontSizes()
-    }
+    const style = normalizeStyle(store.get('style') as Partial<StyleConfig>)
     const colors = getThemeColors(style)
     return {
       ...style,
@@ -580,46 +825,57 @@ function setupIpcHandlers(): void {
 
   // 验证密码
   ipcMain.handle('verify-password', async (_, password: string): Promise<boolean> => {
-    const pwdConfig = store.get('password') as PasswordConfig
+    const result = verifyPasswordAgainstConfig(password)
+    if (result.success) {
+      closeLockWindow()
+    }
+    return result.success
+  })
 
-    if (pwdConfig.type === 'fixed' || pwdConfig.type === 'both') {
-      if (password === pwdConfig.fixedPassword) {
+  // 验证密码并返回使用方式（给锁屏记录用）
+  ipcMain.handle(
+    'verify-password-with-method',
+    async (_, password: string): Promise<PasswordVerifyResult> => {
+      const result = verifyPasswordAgainstConfig(password)
+      if (result.success) {
         closeLockWindow()
-        return true
       }
+      return result
     }
+  )
 
-    if ((pwdConfig.type === 'totp' || pwdConfig.type === 'both') && pwdConfig.totpSecret) {
-      try {
-        const isValid = totpModule.verify({ token: password, secret: pwdConfig.totpSecret })
-        if (isValid) {
-          closeLockWindow()
-          return true
-        }
-      } catch (e) {
-        console.error('TOTP verification error:', e)
-      }
-    }
-
-    return false
+  // 设置页二次确认密码（不触发解锁逻辑）
+  ipcMain.handle('verify-settings-password', async (_, password: string): Promise<boolean> => {
+    const result = verifyPasswordAgainstConfig(password)
+    return result.success
   })
 
   // 生成 TOTP 密钥
-  ipcMain.handle('generate-totp-secret', () => {
+  ipcMain.handle('generate-totp-secret', (_, deviceName?: string) => {
+    if (!totpModule) {
+      throw new Error('TOTP module not initialized')
+    }
+
+    const normalizedDeviceName = normalizeTotpDeviceName(deviceName)
+    const accountLabel = `LockIt - ${normalizedDeviceName}`
+
     const secret = totpModule.generateSecret()
     return {
-      secret: secret.base32,
-      otpauthUrl: secret.otpauth_url
+      secret,
+      otpauthUrl: `otpauth://totp/${encodeURIComponent(accountLabel)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent('LockIt')}`,
+      deviceName: normalizedDeviceName
     }
   })
 
   // 完成设置向导
   ipcMain.handle('complete-setup', () => {
     store.set('hasCompletedSetup', true)
+    settingsDirty = false
 
-    // 隐藏设置窗口，开始后台运行
-    if (mainWindow) {
-      mainWindow.hide()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      navigateMainWindowTo('settings')
+      mainWindow.show()
+      mainWindow.focus()
     }
 
     // 启动定时检查
@@ -640,13 +896,7 @@ function setupIpcHandlers(): void {
     if (!mainWindow || mainWindow.isDestroyed()) {
       createMainWindow()
     } else {
-      // 切换到设置页面
-      const pageHash = 'settings'
-      if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-        mainWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${pageHash}`)
-      } else {
-        mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: pageHash })
-      }
+      navigateMainWindowTo('settings')
       mainWindow.show()
       mainWindow.focus()
     }
@@ -767,8 +1017,13 @@ function setupIpcHandlers(): void {
   })
 
   // 清空所有解锁记录
-  ipcMain.handle('clear-unlock-records', async () => {
+  ipcMain.handle('clear-unlock-records', async (_, password: string) => {
     try {
+      const verifyResult = verifyPasswordAgainstConfig(password)
+      if (!verifyResult.success) {
+        return false
+      }
+
       const fs = await import('fs')
 
       const records = (store.get('unlockRecords') as UnlockRecord[]) || []
@@ -828,6 +1083,9 @@ app.whenReady().then(async () => {
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    if (!is.dev) {
+      registerProductionShortcutGuards(window)
+    }
   })
 
   setupIpcHandlers()
@@ -848,6 +1106,9 @@ app.whenReady().then(async () => {
       createMainWindow()
     }
   })
+}).catch((error) => {
+  console.error('Application bootstrap failed:', error)
+  app.quit()
 })
 
 app.on('window-all-closed', () => {

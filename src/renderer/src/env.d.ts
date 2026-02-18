@@ -7,6 +7,18 @@ interface FontSizeConfig {
   timeText: number
 }
 
+interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 interface StyleConfig {
   themeMode: 'light' | 'dark' | 'system' | 'custom'
   themeName?: string
@@ -22,6 +34,8 @@ interface StyleConfig {
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 interface UnlockRecord {
@@ -29,6 +43,7 @@ interface UnlockRecord {
   timestamp: number
   success: boolean
   attemptCount: number
+  unlockMethod?: 'fixed' | 'totp'
   photoData?: string
   photoPath?: string
   error?: string
@@ -43,6 +58,7 @@ interface PasswordConfig {
   type: 'fixed' | 'totp' | 'both'
   fixedPassword?: string
   totpSecret?: string
+  totpDeviceName?: string
 }
 
 interface API {
@@ -73,9 +89,11 @@ interface API {
 
   // 密码验证
   verifyPassword: (password: string) => Promise<boolean>
+  verifyPasswordWithMethod: (password: string) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
+  verifySettingsPassword: (password: string) => Promise<boolean>
 
   // TOTP
-  generateTOTPSecret: () => Promise<{ secret: string; otpauthUrl: string }>
+  generateTOTPSecret: (deviceName?: string) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
 
   // 设置和解锁
   completeSetup: () => Promise<boolean>
@@ -87,17 +105,23 @@ interface API {
     timestamp: number
     success: boolean
     attemptCount: number
+    unlockMethod?: 'fixed' | 'totp'
     photoData?: string
     error?: string
   }) => Promise<boolean>
   getUnlockRecords: () => Promise<UnlockRecord[]>
   deleteUnlockRecord: (id: string) => Promise<boolean>
-  clearUnlockRecords: () => Promise<boolean>
+  clearUnlockRecords: (password: string) => Promise<boolean>
 
   // 摄像头
   getCameras: () => Promise<CameraDevice[]>
   getSelectedCamera: () => Promise<string | undefined>
   setSelectedCamera: (deviceId: string) => Promise<boolean>
+
+  // 设置页未保存拦截
+  setSettingsDirty: (dirty: boolean) => Promise<boolean>
+  onSettingsCloseAttempt: (callback: () => void) => void
+  respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
 }
 
 declare global {

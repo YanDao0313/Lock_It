@@ -11,6 +11,18 @@ interface FontSizeConfig {
   timeText: number
 }
 
+interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 interface StyleConfig {
   centerText: string
   subText: string
@@ -22,12 +34,15 @@ interface StyleConfig {
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 interface UnlockRecord {
   timestamp: number
   success: boolean
   attemptCount: number
+  unlockMethod?: 'fixed' | 'totp'
   photoData?: string
   error?: string
 }
@@ -51,22 +66,19 @@ function Keypad({
   const isLightText = textColor.toLowerCase() === '#ffffff' || textColor.toLowerCase() === '#fff'
   const buttonBg = isLightText ? 'bg-white/10' : 'bg-black/10'
   const buttonHoverBg = isLightText ? 'hover:bg-white/20' : 'hover:bg-black/20'
-  const buttonActiveBg = isLightText ? 'active:bg-white/30' : 'active:bg-black/30'
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-2">
       {keys.map((key) => {
         if (key === 'C') {
           return (
             <button
               key={key}
               onClick={onClear}
-              className={`w-16 h-16 rounded-xl ${buttonBg} ${buttonHoverBg} ${buttonActiveBg} 
-                flex items-center justify-center text-xl font-medium 
-                transition-all duration-200 active:scale-95`}
+              className={`h-14 ${buttonBg} ${buttonHoverBg} flex items-center justify-center text-sm font-medium transition-colors`}
               style={{ color: textColor }}
             >
-              <span className="text-sm">清空</span>
+              清空
             </button>
           )
         }
@@ -75,12 +87,10 @@ function Keypad({
             <button
               key={key}
               onClick={onDelete}
-              className={`w-16 h-16 rounded-xl ${buttonBg} ${buttonHoverBg} ${buttonActiveBg} 
-                flex items-center justify-center text-xl font-medium 
-                transition-all duration-200 active:scale-95`}
+              className={`h-14 ${buttonBg} ${buttonHoverBg} flex items-center justify-center transition-colors`}
               style={{ color: textColor }}
             >
-              <Delete className="w-6 h-6" />
+              <Delete className="w-5 h-5" />
             </button>
           )
         }
@@ -88,9 +98,7 @@ function Keypad({
           <button
             key={key}
             onClick={() => onKeyPress(key)}
-            className={`w-16 h-16 rounded-xl ${buttonBg} ${buttonHoverBg} ${buttonActiveBg} 
-              flex items-center justify-center text-2xl font-medium 
-              transition-all duration-200 active:scale-95`}
+            className={`h-14 ${buttonBg} ${buttonHoverBg} flex items-center justify-center text-xl font-medium transition-colors`}
             style={{ color: textColor }}
           >
             {key}
@@ -116,40 +124,35 @@ function CameraCapture({
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [hasCamera, setHasCamera] = useState(false)
-  const [error, setError] = useState('')
+  const [, setError] = useState('')
   const [isUsingFallback, setIsUsingFallback] = useState(false)
   const streamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     if (!enabled) {
-      // 清理流
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop())
         streamRef.current = null
       }
       setHasCamera(false)
-      setIsUsingFallback(false)
       return
     }
 
     const initCamera = async () => {
       try {
-        // 停止之前的流
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop())
         }
 
-        // 首先尝试使用指定的设备ID
         if (selectedDeviceId) {
           try {
-            const constraints: MediaStreamConstraints = {
+            const stream = await navigator.mediaDevices.getUserMedia({
               video: {
                 width: { ideal: 640 },
                 height: { ideal: 480 },
                 deviceId: { exact: selectedDeviceId }
               }
-            }
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            })
             streamRef.current = stream
             if (videoRef.current) {
               videoRef.current.srcObject = stream
@@ -158,46 +161,28 @@ function CameraCapture({
               setError('')
               return
             }
-          } catch (specificErr: any) {
-            console.warn('Failed to use selected camera, will try fallback:', specificErr)
-            // 指定的摄像头不可用，继续尝试默认摄像头
+          } catch {
+            setHasCamera(false)
+            setIsUsingFallback(false)
+            setError('指定摄像头不可用')
+            return
           }
         }
 
-        // 尝试使用默认摄像头（优先使用前置摄像头）
-        try {
-          const fallbackConstraints: MediaStreamConstraints = {
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-              facingMode: 'user'
-            }
-          }
-          const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints)
-          streamRef.current = stream
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-            setHasCamera(true)
-            // 如果用户指定了摄像头但我们回退到了默认摄像头，标记为使用回退
-            setIsUsingFallback(!!selectedDeviceId)
-            setError('')
-          }
-        } catch (fallbackErr: any) {
-          setHasCamera(false)
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          setHasCamera(true)
           setIsUsingFallback(false)
-          if (fallbackErr.name === 'NotAllowedError') {
-            setError('摄像头权限被拒绝')
-          } else if (fallbackErr.name === 'NotFoundError') {
-            setError('未找到摄像头设备')
-          } else {
-            setError('摄像头初始化失败')
-          }
+          setError('')
         }
-      } catch (err: any) {
-        console.error('Camera error:', err)
+      } catch (err) {
         setHasCamera(false)
         setIsUsingFallback(false)
-        setError('摄像头初始化失败')
+        setError('摄像头不可用')
       }
     }
 
@@ -213,23 +198,19 @@ function CameraCapture({
 
   const capture = () => {
     if (!videoRef.current || !canvasRef.current || !hasCamera) return null
-
     const video = videoRef.current
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-
     if (!ctx) return null
 
     canvas.width = video.videoWidth || 640
     canvas.height = video.videoHeight || 480
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
     const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
     onCapture(dataUrl)
     return dataUrl
   }
 
-  // 暴露捕获方法给父组件
   useEffect(() => {
     if (enabled) {
       ;(window as any).capturePhoto = capture
@@ -240,30 +221,13 @@ function CameraCapture({
 
   return (
     <div className="fixed top-4 right-4 z-50">
-      {/* 隐藏的视频元素 */}
       <video ref={videoRef} autoPlay playsInline muted className="hidden" />
       <canvas ref={canvasRef} className="hidden" />
-
-      {/* 摄像头状态指示器 */}
       <div
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium
-          transition-all duration-300 ${
-            hasCamera
-              ? isUsingFallback
-                ? 'bg-yellow-500/20 text-yellow-400'
-                : 'bg-green-500/20 text-green-400'
-              : 'bg-red-500/20 text-red-400'
-          }`}
-        title={
-          error ||
-          (hasCamera
-            ? isUsingFallback
-              ? '使用备用摄像头（指定的摄像头不可用）'
-              : '摄像头正常工作'
-            : '摄像头不可用')
-        }
+        className={`flex items-center gap-2 px-3 py-1.5 text-xs font-mono
+          ${hasCamera ? (isUsingFallback ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400') : 'bg-red-500/20 text-red-400'}`}
       >
-        {hasCamera ? <Camera className="w-3 h-3" /> : <Camera className="w-3 h-3 opacity-50" />}
+        <Camera className="w-3 h-3" />
         {hasCamera ? (isUsingFallback ? '备用摄像头' : '监控中') : '无监控'}
       </div>
     </div>
@@ -277,24 +241,22 @@ export default function LockScreen() {
   const [style, setStyle] = useState<StyleConfig>({
     centerText: '此计算机因违规外联已被阻断',
     subText: '请等待安全部门与你联系',
-    bottomLeftText: '保密委员会办公室',
+    bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
     bottomRightText: '',
     backgroundColor: '#0066cc',
     textColor: '#ffffff',
     timePosition: 'hidden',
     timeFormat: 'HH:mm:ss',
-    closeScreenPrompt: '请关闭班级大屏后再继续操作',
-    fontSizes: {
-      centerText: 48,
-      subText: 28,
-      bottomText: 16,
-      timeText: 20
-    }
+    closeScreenPrompt: '请关闭投影设备后继续',
+    fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
+    textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
+    fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
   })
 
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showClosePrompt, setShowClosePrompt] = useState(false)
   const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [unlockReady, setUnlockReady] = useState(false)
   const [pin, setPin] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState('')
@@ -302,50 +264,51 @@ export default function LockScreen() {
   const [, setUnlockRecords] = useState<UnlockRecord[]>([])
   const [cameraEnabled] = useState(true)
   const [selectedCamera, setSelectedCamera] = useState<string | undefined>(undefined)
+  const [cameraConfigLoaded, setCameraConfigLoaded] = useState(false)
   const [attemptCount, setAttemptCount] = useState(0)
 
-  // 获取样式配置
+  // 光标自动隐藏相关
+  const [cursorVisible, setCursorVisible] = useState(true)
+  const cursorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // 加载样式
   useEffect(() => {
-    const loadStyle = async () => {
-      try {
-        const config = await window.api.getStyle()
-        if (config) {
-          setStyle({
-            centerText: config.centerText || '此计算机因违规外联已被阻断',
-            subText: config.subText || '请等待安全部门与你联系',
-            bottomLeftText: config.bottomLeftText || '',
-            bottomRightText: config.bottomRightText || '',
-            backgroundColor: config.backgroundColor || '#0066cc',
-            textColor: config.textColor || '#ffffff',
-            timePosition: config.timePosition || 'hidden',
-            timeFormat: config.timeFormat || 'HH:mm:ss',
-            closeScreenPrompt: config.closeScreenPrompt || '请关闭班级大屏后再继续操作',
-            fontSizes: config.fontSizes || {
-              centerText: 48,
-              subText: 28,
-              bottomText: 16,
-              timeText: 20
-            }
-          })
-        }
-      } catch (e) {
-        console.error('Failed to load style:', e)
+    window.api.getStyle().then((config) => {
+      if (config) {
+        setStyle({
+          centerText: config.centerText || '此计算机因违规外联已被阻断',
+          subText: config.subText || '请等待安全部门与你联系',
+          bottomLeftText: config.bottomLeftText || '保密委员会办公室\n意识形态工作领导小组办公室',
+          bottomRightText: config.bottomRightText || '',
+          backgroundColor: config.backgroundColor || '#0066cc',
+          textColor: config.textColor || '#ffffff',
+          timePosition: config.timePosition || 'hidden',
+          timeFormat: config.timeFormat || 'HH:mm:ss',
+          closeScreenPrompt: config.closeScreenPrompt || '请关闭投影设备后继续',
+          fontSizes: config.fontSizes || { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
+          textAligns: config.textAligns || {
+            centerText: 'center',
+            subText: 'center',
+            bottomText: 'center'
+          },
+          fontWeights: config.fontWeights || {
+            centerText: 'medium',
+            subText: 'normal',
+            bottomText: 'normal'
+          }
+        })
       }
-    }
-    loadStyle()
+    })
   }, [])
 
-  // 获取选中的相机
+  // 加载选中的摄像头
   useEffect(() => {
-    const loadSelectedCamera = async () => {
-      try {
-        const deviceId = await window.api.getSelectedCamera()
-        setSelectedCamera(deviceId)
-      } catch (e) {
-        console.error('Failed to load selected camera:', e)
-      }
-    }
-    loadSelectedCamera()
+    window.api
+      .getSelectedCamera()
+      .then(setSelectedCamera)
+      .catch(console.error)
+      .finally(() => setCameraConfigLoaded(true))
   }, [])
 
   // 更新时间
@@ -354,27 +317,53 @@ export default function LockScreen() {
     return () => clearInterval(timer)
   }, [])
 
-  // 键盘事件监听
+  // 光标自动隐藏逻辑
+  const resetCursorTimeout = useCallback(() => {
+    if (cursorTimeoutRef.current) {
+      clearTimeout(cursorTimeoutRef.current)
+    }
+    setCursorVisible(true)
+    cursorTimeoutRef.current = setTimeout(() => {
+      setCursorVisible(false)
+    }, 3000)
+  }, [])
+
+  useEffect(() => {
+    const handleMouseMove = () => resetCursorTimeout()
+    const handleMouseDown = () => resetCursorTimeout()
+    const handleKeyDown = () => resetCursorTimeout()
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    resetCursorTimeout()
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('keydown', handleKeyDown)
+      if (cursorTimeoutRef.current) clearTimeout(cursorTimeoutRef.current)
+    }
+  }, [resetCursorTimeout])
+
+  // 键盘事件
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!showUnlockModal || unlocked) return
-
-      if (e.key >= '0' && e.key <= '9') {
-        handleKeyPress(e.key)
-      } else if (e.key === 'Backspace') {
-        handleDelete()
-      } else if (e.key === 'Enter') {
-        handleUnlock()
-      } else if (e.key === 'Escape') {
+      if (e.key >= '0' && e.key <= '9') handleKeyPress(e.key)
+      else if (e.key === 'Backspace') handleDelete()
+      else if (e.key === 'Enter') handleUnlock()
+      else if (e.key === 'Escape') {
         setShowUnlockModal(false)
+        setUnlockReady(false)
         setPin('')
         setError('')
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showUnlockModal, pin, unlocked])
+  }, [showUnlockModal, pin, unlocked, isVerifying])
 
   const handleKeyPress = useCallback(
     (key: string) => {
@@ -400,31 +389,28 @@ export default function LockScreen() {
     }
   }, [isVerifying, unlocked])
 
-  // 拍照并记录
-  const captureAndRecord = async (success: boolean, currentAttemptCount: number) => {
+  const captureAndRecord = async (
+    success: boolean,
+    count: number,
+    unlockMethod?: 'fixed' | 'totp'
+  ) => {
     let photoData: string | undefined
-    let error: string | undefined
-
     try {
       if (cameraEnabled && (window as any).capturePhoto) {
         photoData = (window as any).capturePhoto()
       }
-    } catch (e: any) {
-      error = e.message || '拍照失败'
+    } catch (e) {
       console.error('Capture error:', e)
     }
 
     const record: UnlockRecord = {
       timestamp: Date.now(),
       success,
-      attemptCount: currentAttemptCount,
-      photoData,
-      error
+      attemptCount: count,
+      unlockMethod,
+      photoData
     }
-
-    setUnlockRecords((prev) => [record, ...prev].slice(0, 50)) // 保留最近50条记录
-
-    // 将记录发送到主进程保存到文件
+    setUnlockRecords((prev) => [record, ...prev].slice(0, 50))
     try {
       await window.api.saveUnlockRecord(record)
     } catch (e) {
@@ -434,69 +420,78 @@ export default function LockScreen() {
 
   const handleUnlock = async () => {
     if (pin.length !== 6 || isVerifying || unlocked) return
-
     setIsVerifying(true)
     setError('')
-
-    // 增加尝试次数
-    const newAttemptCount = attemptCount + 1
-    setAttemptCount(newAttemptCount)
+    const newCount = attemptCount + 1
+    setAttemptCount(newCount)
 
     try {
-      const success = await window.api.verifyPassword(pin)
-
-      // 记录解锁尝试（无论成功与否）
-      await captureAndRecord(success, newAttemptCount)
-
-      if (success) {
+      const result = await window.api.verifyPasswordWithMethod(pin)
+      await captureAndRecord(result.success, newCount, result.method)
+      if (result.success) {
         setUnlocked(true)
-        setTimeout(() => {
-          window.api.unlock()
-        }, 800)
+        setTimeout(() => window.api.unlock(), 800)
       } else {
         setError('密码错误')
         setPin('')
-        // 错误震动动画
-        const modal = document.getElementById('unlock-modal')
-        modal?.classList.add('animate-shake')
-        setTimeout(() => modal?.classList.remove('animate-shake'), 500)
       }
     } catch (e) {
-      console.error('Unlock error:', e)
       setError('验证失败')
       setPin('')
-      await captureAndRecord(false, newAttemptCount)
+      await captureAndRecord(false, newCount)
     } finally {
       setIsVerifying(false)
     }
   }
 
-  // 自动提交当输入满6位
   useEffect(() => {
     if (pin.length === 6 && !isVerifying && !unlocked) {
       handleUnlock()
     }
   }, [pin])
 
-  // 点击背景
+  // 点击背景处理 - 两步迷惑流程
+  // 1. 点击背景 -> 显示"关闭投影设备"提示（迷惑性）
+  // 2. 点击"已关闭，继续" -> 仅关闭提示并进入可解锁状态（仍不显示密码框）
+  // 3. 再次点击背景 -> 才显示密码输入框
   const handleBackgroundClick = () => {
-    if (!unlocked && !showUnlockModal && !showClosePrompt) {
+    if (unlocked || showUnlockModal) return
+
+    if (unlockReady) {
+      setShowUnlockModal(true)
+      setAttemptCount(0)
+      return
+    }
+
+    if (!showClosePrompt) {
       setShowClosePrompt(true)
+    } else {
+      setShowClosePrompt(false)
     }
   }
 
-  // 确认关闭大屏后继续
+  // 确认关闭大屏后继续 - 只允许下一次背景点击进入密码输入
   const handleConfirmClose = () => {
     setShowClosePrompt(false)
-    setShowUnlockModal(true)
-    setAttemptCount(0) // 重置尝试次数
+    setUnlockReady(true)
   }
 
-  // 格式化时间
+  const alignClassMap = {
+    left: 'text-left',
+    center: 'text-center',
+    right: 'text-right'
+  } as const
+
+  const fontWeightMap = {
+    light: 300,
+    normal: 400,
+    medium: 500,
+    bold: 700
+  } as const
+
   const formatTime = (date: Date): string => {
     const format = style.timeFormat || 'HH:mm:ss'
     const pad = (n: number) => n.toString().padStart(2, '0')
-
     return format
       .replace('HH', pad(date.getHours()))
       .replace('mm', pad(date.getMinutes()))
@@ -506,78 +501,65 @@ export default function LockScreen() {
       .replace('DD', pad(date.getDate()))
   }
 
-  // 渲染时间
   const renderTime = () => {
     if (style.timePosition === 'hidden') return null
-
-    const positionClasses = {
+    const positions = {
       'top-left': 'fixed top-8 left-8',
       'top-right': 'fixed top-8 right-8',
       'bottom-left': 'fixed bottom-8 left-8',
       'bottom-right': 'fixed bottom-8 right-8',
-      center: 'mb-8'
+      'center': 'mb-6'
     }
-
     return (
       <div
-        className={`${positionClasses[style.timePosition]} opacity-80 font-mono
-          transition-all duration-500 animate-fade-in`}
-        style={{ color: style.textColor, fontSize: style.fontSizes?.timeText || 20 }}
+        className={`${positions[style.timePosition]} font-mono opacity-70`}
+        style={{
+          color: style.textColor,
+          fontSize: style.fontSizes?.timeText || 18,
+          textAlign: style.textAligns?.subText || 'center'
+        }}
       >
         {formatTime(currentTime)}
       </div>
     )
   }
 
-  // 获取主标题字体大小（响应式）
-  const getCenterTextSize = () => {
-    const baseSize = style.fontSizes?.centerText || 48
-    // 根据文字长度适当调整
-    const textLength = style.centerText?.length || 0
-    if (textLength > 50) return Math.max(baseSize * 0.6, 24)
-    if (textLength > 30) return Math.max(baseSize * 0.8, 28)
-    return baseSize
-  }
-
   return (
     <div
-      className="min-h-screen w-full flex flex-col items-center justify-center p-8 select-none cursor-pointer
-        transition-all duration-500"
+      ref={containerRef}
+      className="min-h-screen w-full flex flex-col items-center justify-center p-8 select-none cursor-default"
       style={{
         backgroundColor: style.backgroundColor,
-        color: style.textColor
+        color: style.textColor,
+        cursor: cursorVisible ? 'default' : 'none'
       }}
       onClick={handleBackgroundClick}
     >
-      {/* 摄像头组件 */}
       <CameraCapture
-        onCapture={(data) => console.log('Photo captured:', data?.slice(0, 50))}
-        enabled={cameraEnabled}
+        onCapture={() => {}}
+        enabled={cameraEnabled && cameraConfigLoaded}
         selectedDeviceId={selectedCamera}
       />
-
-      {/* 时间显示 */}
       {renderTime()}
 
-      {/* 主内容区域 */}
-      <div className="text-center max-w-4xl animate-fade-in-up">
-        {/* 主标题 - 支持换行 */}
+      {/* 主内容 */}
+      <div className="max-w-4xl w-full">
         <h1
-          className="font-medium mb-4 leading-relaxed whitespace-pre-line"
+          className={`whitespace-pre-line leading-relaxed ${alignClassMap[style.textAligns?.centerText || 'center']}`}
           style={{
             color: style.textColor,
-            fontSize: getCenterTextSize()
+            fontSize: Math.min(style.fontSizes?.centerText || 48, 48),
+            fontWeight: fontWeightMap[style.fontWeights?.centerText || 'medium']
           }}
         >
           {style.centerText}
         </h1>
-
-        {/* 副标题 - 支持换行 */}
         <p
-          className="opacity-90 whitespace-pre-line"
+          className={`opacity-80 whitespace-pre-line mt-4 ${alignClassMap[style.textAligns?.subText || 'center']}`}
           style={{
             color: style.textColor,
-            fontSize: style.fontSizes?.subText || 28
+            fontSize: Math.min(style.fontSizes?.subText || 24, 24),
+            fontWeight: fontWeightMap[style.fontWeights?.subText || 'normal']
           }}
         >
           {style.subText}
@@ -586,64 +568,55 @@ export default function LockScreen() {
 
       {/* 底部文字 */}
       <div
-        className="fixed bottom-8 left-8 right-8 flex justify-between opacity-70
-          whitespace-pre-line"
-        style={{ color: style.textColor, fontSize: style.fontSizes?.bottomText || 16 }}
+        className="fixed bottom-8 left-8 right-8 flex items-end justify-between gap-8 opacity-60 pointer-events-none"
+        style={{
+          color: style.textColor,
+          fontSize: style.fontSizes?.bottomText || 14,
+          fontWeight: fontWeightMap[style.fontWeights?.bottomText || 'normal']
+        }}
       >
-        <span>{style.bottomLeftText}</span>
-        <span>{style.bottomRightText}</span>
+        <span className="whitespace-pre-line text-left max-w-[45%]">{style.bottomLeftText}</span>
+        <span className="whitespace-pre-line text-right max-w-[45%]">{style.bottomRightText}</span>
       </div>
 
-      {/* 关闭班级大屏提示 */}
+      {/* 关闭设备提示 - 第一步 */}
       {showClosePrompt && (
         <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50
-            animate-fade-in"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-40"
           onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'default' }}
         >
           <div
-            className="rounded-xl p-8 max-w-md text-center mx-4 animate-scale-in"
-            style={{
-              backgroundColor: style.backgroundColor,
-              border: `2px solid ${style.textColor}40`,
-              boxShadow: `0 0 40px ${style.backgroundColor}80`
-            }}
+            className="p-8 max-w-md mx-4 text-center"
+            style={{ backgroundColor: style.backgroundColor }}
           >
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4
-                animate-pulse"
-              style={{ backgroundColor: `${style.textColor}20` }}
+              className="w-12 h-12 flex items-center justify-center mx-auto mb-4"
+              style={{ border: `1px solid ${style.textColor}40` }}
             >
-              <AlertTriangle className="w-8 h-8" style={{ color: style.textColor }} />
+              <AlertTriangle className="w-6 h-6" style={{ color: style.textColor }} />
             </div>
-
             <h3
-              className="font-medium mb-4 whitespace-pre-line"
-              style={{ color: style.textColor, fontSize: 20 }}
+              className={`text-lg mb-4 whitespace-pre-line ${alignClassMap[style.textAligns?.centerText || 'center']}`}
+              style={{ color: style.textColor }}
             >
               {style.closeScreenPrompt}
             </h3>
-
+            <p className="text-sm opacity-60 mb-6" style={{ color: style.textColor }}>
+              点击"已关闭"继续解锁，或点击背景取消
+            </p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => setShowClosePrompt(false)}
-                className="px-6 py-2 rounded-lg text-sm font-medium opacity-60 
-                  hover:opacity-100 transition-all duration-200"
-                style={{
-                  color: style.textColor,
-                  border: `1px solid ${style.textColor}40`
-                }}
+                className="px-6 py-2 text-sm opacity-60 hover:opacity-100 transition-opacity"
+                style={{ color: style.textColor, border: `1px solid ${style.textColor}30` }}
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmClose}
-                className="px-6 py-2 rounded-lg text-sm font-medium
-                  transition-all duration-200 hover:scale-105 active:scale-95"
-                style={{
-                  backgroundColor: style.textColor,
-                  color: style.backgroundColor
-                }}
+                className="px-6 py-2 text-sm font-medium transition-colors"
+                style={{ backgroundColor: style.textColor, color: style.backgroundColor }}
               >
                 已关闭，继续
               </button>
@@ -652,99 +625,79 @@ export default function LockScreen() {
         </div>
       )}
 
-      {/* 解锁弹窗 */}
+      {/* 解锁弹窗 - 第二步 */}
       {showUnlockModal && !unlocked && (
         <div
-          id="unlock-modal"
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50
-            animate-fade-in"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
           onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'default' }}
         >
-          <div
-            className="rounded-xl p-6 w-80 animate-scale-in"
-            style={{
-              backgroundColor: style.backgroundColor,
-              border: `1px solid ${style.textColor}30`,
-              boxShadow: `0 20px 60px rgba(0,0,0,0.5)`
-            }}
-          >
-            {/* 头部 */}
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-medium" style={{ color: style.textColor }}>
-                输入密码解锁
+          <div className="w-80" style={{ backgroundColor: style.backgroundColor }}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: `${style.textColor}20` }}>
+              <span className="text-sm font-medium" style={{ color: style.textColor }}>
+                输入密码
               </span>
               {attemptCount > 0 && (
-                <span className="text-xs opacity-60" style={{ color: style.textColor }}>
-                  第 {attemptCount} 次尝试
+                <span className="text-xs opacity-50" style={{ color: style.textColor }}>
+                  第 {attemptCount} 次
                 </span>
               )}
               <button
                 onClick={() => {
                   setShowUnlockModal(false)
+                  setUnlockReady(false)
                   setPin('')
                   setError('')
                 }}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-all duration-200
-                  active:scale-90"
+                className="p-1 opacity-50 hover:opacity-100 transition-opacity"
                 style={{ color: style.textColor }}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* 密码显示 */}
-            <div className="flex justify-center gap-2 mb-4">
-              {Array.from({ length: 6 }, (_, i) => (
+            <div className="p-6">
+              {/* 密码显示 */}
+              <div className="flex justify-center gap-2 mb-6">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div
+                    key={i}
+                    className="w-10 h-12 flex items-center justify-center text-lg font-bold border-2 transition-all"
+                    style={{
+                      borderColor: error ? '#ef4444' : i < pin.length ? style.textColor : `${style.textColor}30`,
+                      backgroundColor: i < pin.length ? `${style.textColor}15` : 'transparent',
+                      color: style.textColor
+                    }}
+                  >
+                    {pin[i] ? '●' : ''}
+                  </div>
+                ))}
+              </div>
+
+              {/* 错误提示 */}
+              {error && (
                 <div
-                  key={i}
-                  className="w-10 h-12 rounded-lg flex items-center justify-center text-lg font-bold 
-                    border-2 transition-all duration-200"
-                  style={{
-                    borderColor: error
-                      ? '#ef4444'
-                      : i < pin.length
-                        ? style.textColor
-                        : `${style.textColor}30`,
-                    backgroundColor: i < pin.length ? `${style.textColor}20` : 'transparent',
-                    color: style.textColor,
-                    transform: i === pin.length - 1 ? 'scale(1.1)' : 'scale(1)'
-                  }}
+                  className="mb-4 p-3 text-sm text-center"
+                  style={{ backgroundColor: '#ef444420', color: '#ef4444' }}
                 >
-                  {pin[i] ? '●' : ''}
+                  {error}
                 </div>
-              ))}
-            </div>
+              )}
 
-            {/* 错误提示 */}
-            {error && (
-              <div
-                className="mb-4 p-2.5 rounded-lg flex items-center justify-center gap-2 text-sm
-                  animate-shake"
-                style={{
-                  backgroundColor: '#ef444420',
-                  color: '#ef4444'
-                }}
-              >
-                <AlertTriangle className="w-4 h-4" />
-                {error}
-              </div>
-            )}
+              {/* 加载中 */}
+              {isVerifying && (
+                <div className="mb-4 text-center">
+                  <div
+                    className="inline-block w-5 h-5 border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: style.textColor, borderTopColor: 'transparent' }}
+                  />
+                  <p className="text-xs mt-2 opacity-60" style={{ color: style.textColor }}>
+                    验证中...
+                  </p>
+                </div>
+              )}
 
-            {/* 加载中 */}
-            {isVerifying && (
-              <div className="mb-4 text-center">
-                <div
-                  className="inline-block w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
-                  style={{ borderColor: style.textColor, borderTopColor: 'transparent' }}
-                />
-                <p className="text-xs mt-2 opacity-70" style={{ color: style.textColor }}>
-                  验证中...
-                </p>
-              </div>
-            )}
-
-            {/* 数字键盘 */}
-            <div className="flex justify-center">
+              {/* 数字键盘 */}
               <Keypad
                 onKeyPress={handleKeyPress}
                 onDelete={handleDelete}
@@ -756,77 +709,24 @@ export default function LockScreen() {
         </div>
       )}
 
-      {/* 解锁成功提示 */}
+      {/* 解锁成功 */}
       {unlocked && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50
-          animate-fade-in"
-        >
-          <div
-            className="rounded-xl p-10 text-center animate-scale-in"
-            style={{ backgroundColor: style.backgroundColor }}
-          >
-            <div
-              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4
-                animate-bounce"
-              style={{ backgroundColor: '#22c55e' }}
-            >
-              <svg
-                className="w-10 h-10 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M5 13l4 4L19 7"
-                />
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="p-10 text-center" style={{ backgroundColor: style.backgroundColor }}>
+            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#22c55e' }}>
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-xl font-medium mb-1" style={{ color: style.textColor }}>
+            <h3 className="text-lg font-medium mb-1" style={{ color: style.textColor }}>
               解锁成功
             </h3>
-            <p className="text-sm opacity-70" style={{ color: style.textColor }}>
+            <p className="text-sm opacity-60" style={{ color: style.textColor }}>
               自动锁屏已暂停
             </p>
           </div>
         </div>
       )}
-
-      {/* CSS 动画 */}
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes scale-in {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-10px); }
-          75% { transform: translateX(10px); }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.5s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
-        }
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-      `}</style>
     </div>
   )
 }

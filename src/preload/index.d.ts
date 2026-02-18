@@ -7,6 +7,18 @@ export interface FontSizeConfig {
   timeText: number
 }
 
+export interface TextAlignConfig {
+  centerText: 'left' | 'center' | 'right'
+  subText: 'left' | 'center' | 'right'
+  bottomText: 'left' | 'center' | 'right'
+}
+
+export interface FontWeightConfig {
+  centerText: 'light' | 'normal' | 'medium' | 'bold'
+  subText: 'light' | 'normal' | 'medium' | 'bold'
+  bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
 export interface StyleConfig {
   themeMode: 'light' | 'dark' | 'system' | 'custom'
   themeName?: string
@@ -22,6 +34,8 @@ export interface StyleConfig {
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
+  textAligns: TextAlignConfig
+  fontWeights: FontWeightConfig
 }
 
 export interface UnlockRecord {
@@ -29,6 +43,7 @@ export interface UnlockRecord {
   timestamp: number
   success: boolean
   attemptCount: number
+  unlockMethod?: 'fixed' | 'totp'
   photoData?: string
   photoPath?: string
   error?: string
@@ -43,6 +58,7 @@ export interface PasswordConfig {
   type: 'fixed' | 'totp' | 'both'
   fixedPassword?: string
   totpSecret?: string
+  totpDeviceName?: string
 }
 
 export interface API {
@@ -68,7 +84,9 @@ export interface API {
   }) => Promise<boolean>
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>
   verifyPassword: (password: string) => Promise<boolean>
-  generateTOTPSecret: () => Promise<{ secret: string; otpauthUrl: string }>
+  verifyPasswordWithMethod: (password: string) => Promise<{ success: boolean; method?: 'fixed' | 'totp' }>
+  verifySettingsPassword: (password: string) => Promise<boolean>
+  generateTOTPSecret: (deviceName?: string) => Promise<{ secret: string; otpauthUrl: string; deviceName: string }>
   completeSetup: () => Promise<boolean>
   unlock: () => Promise<boolean>
   openSettings: () => Promise<boolean>
@@ -76,15 +94,19 @@ export interface API {
     timestamp: number
     success: boolean
     attemptCount: number
+    unlockMethod?: 'fixed' | 'totp'
     photoData?: string
     error?: string
   }) => Promise<boolean>
   getUnlockRecords: () => Promise<UnlockRecord[]>
   deleteUnlockRecord: (id: string) => Promise<boolean>
-  clearUnlockRecords: () => Promise<boolean>
+  clearUnlockRecords: (password: string) => Promise<boolean>
   getCameras: () => Promise<CameraDevice[]>
   getSelectedCamera: () => Promise<string | undefined>
   setSelectedCamera: (deviceId: string) => Promise<boolean>
+  setSettingsDirty: (dirty: boolean) => Promise<boolean>
+  onSettingsCloseAttempt: (callback: () => void) => void
+  respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
 }
 
 declare global {
