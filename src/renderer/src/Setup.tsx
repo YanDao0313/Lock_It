@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Check, Shield, Calendar, KeyRound } from 'lucide-react'
 import QRCode from 'qrcode'
 
@@ -202,6 +202,9 @@ function Input({
 export default function Setup() {
   const [step, setStep] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
+  const [autoLaunch, setAutoLaunch] = useState(true)
+  const [autoLaunchSupported, setAutoLaunchSupported] = useState(true)
+  const [platform, setPlatform] = useState('')
 
   const [fixedPassword, setFixedPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -232,6 +235,18 @@ export default function Setup() {
   const hasAnyEnabledSchedule = Object.values(schedule).some((d) => d.enabled && d.slots.length > 0)
   const normalizedTotpDeviceName = totpDeviceName.trim().toUpperCase()
   const isTotpDeviceLocked = isTotpDeviceConfirmed || Boolean(totpSecret.trim())
+
+  useEffect(() => {
+    window.api
+      .getRuntimeInfo()
+      .then((info) => {
+        setAutoLaunchSupported(info.autoLaunchSupported)
+        setPlatform(info.platform)
+      })
+      .catch(() => {
+        setAutoLaunchSupported(true)
+      })
+  }, [])
 
   const canProceed = () => {
     if (step === 1) return hasValidPassword
@@ -335,7 +350,10 @@ export default function Setup() {
           totpDeviceName: totpEnabled && totpSecret ? totpDeviceName : undefined
         },
         schedule,
-        style
+        style,
+        startup: {
+          autoLaunch: autoLaunchSupported ? autoLaunch : false
+        }
       })
       await window.api.completeSetup()
     } catch (e) {
@@ -346,7 +364,7 @@ export default function Setup() {
     }
   }
 
-  const steps = ['欢迎', '固定密码', '可选TOTP', '锁屏时段', '界面样式', '完成']
+  const steps = ['欢迎', '固定密码', '可选TOTP', '锁屏时段', '自动启动', '界面样式', '完成']
 
   return (
     <div className="h-dvh bg-neutral-50 text-neutral-900 flex items-center justify-center p-6">
@@ -593,6 +611,27 @@ export default function Setup() {
           )}
 
           {step === 4 && (
+            <Card title="自动启动" subtitle="设置系统登录后是否自动运行 Lock It">
+              <div className="space-y-4 text-sm text-neutral-700">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={autoLaunchSupported ? autoLaunch : false}
+                    onChange={(e) => setAutoLaunch(e.target.checked)}
+                    disabled={!autoLaunchSupported}
+                  />
+                  开机（登录系统后）自动启动
+                </label>
+                {!autoLaunchSupported && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2">
+                    当前平台（{platform || 'unknown'}）暂不支持自动启动配置，将按关闭处理。
+                  </p>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {step === 5 && (
             <Card title="界面样式" subtitle="与设置页字段保持一致，可在设置页继续精细调整">
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -665,7 +704,7 @@ export default function Setup() {
             </Card>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <Card title="配置完成" subtitle="点击下方按钮保存并进入设置页面">
               <div className="text-sm text-neutral-700 space-y-2">
                 <p>固定密码：已配置</p>
@@ -673,6 +712,7 @@ export default function Setup() {
                   TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}
                 </p>
                 <p>锁屏时段：已配置</p>
+                <p>自动启动：{autoLaunchSupported ? (autoLaunch ? '已启用' : '未启用') : '当前平台不支持'}</p>
                 <p>界面样式：已配置</p>
               </div>
             </Card>

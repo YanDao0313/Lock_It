@@ -534,214 +534,218 @@ export default function LockScreen() {
     >
       {!isStyleLoaded ? null : (
         <>
-      <CameraCapture
-        onCapture={() => {}}
-        enabled={cameraEnabled && cameraConfigLoaded}
-        selectedDeviceId={selectedCamera}
-      />
-      {renderTime()}
+          <CameraCapture
+            onCapture={() => {}}
+            enabled={cameraEnabled && cameraConfigLoaded}
+            selectedDeviceId={selectedCamera}
+          />
+          {renderTime()}
 
-      {/* 主内容 */}
-      <div className="max-w-4xl w-full">
-        <h1
-          className={`whitespace-pre-line leading-relaxed ${alignClassMap[style.textAligns?.centerText || 'center']}`}
-          style={{
-            color: style.textColor,
-            fontSize: style.fontSizes?.centerText || 48,
-            fontWeight: fontWeightMap[style.fontWeights?.centerText || 'medium']
-          }}
-        >
-          {style.centerText}
-        </h1>
-        <p
-          className={`opacity-80 whitespace-pre-line mt-4 ${alignClassMap[style.textAligns?.subText || 'center']}`}
-          style={{
-            color: style.textColor,
-            fontSize: style.fontSizes?.subText || 24,
-            fontWeight: fontWeightMap[style.fontWeights?.subText || 'normal']
-          }}
-        >
-          {style.subText}
-        </p>
-      </div>
+          {/* 主内容 */}
+          <div className="max-w-4xl w-full">
+            <h1
+              className={`whitespace-pre-line leading-relaxed ${alignClassMap[style.textAligns?.centerText || 'center']}`}
+              style={{
+                color: style.textColor,
+                fontSize: style.fontSizes?.centerText || 48,
+                fontWeight: fontWeightMap[style.fontWeights?.centerText || 'medium']
+              }}
+            >
+              {style.centerText}
+            </h1>
+            <p
+              className={`opacity-80 whitespace-pre-line mt-4 ${alignClassMap[style.textAligns?.subText || 'center']}`}
+              style={{
+                color: style.textColor,
+                fontSize: style.fontSizes?.subText || 24,
+                fontWeight: fontWeightMap[style.fontWeights?.subText || 'normal']
+              }}
+            >
+              {style.subText}
+            </p>
+          </div>
 
-      {/* 底部文字 */}
-      <div
-        className="fixed bottom-8 left-8 right-8 flex items-end justify-between gap-8 opacity-60 pointer-events-none"
-        style={{
-          color: style.textColor,
-          fontSize: style.fontSizes?.bottomText || 14,
-          fontWeight: fontWeightMap[style.fontWeights?.bottomText || 'normal']
-        }}
-      >
-        <span className="whitespace-pre-line text-left max-w-[45%]">{style.bottomLeftText}</span>
-        <span className="whitespace-pre-line text-right max-w-[45%]">{style.bottomRightText}</span>
-      </div>
-
-      {/* 关闭设备提示 - 第一步 */}
-      {showClosePrompt && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-40"
-          onClick={(e) => e.stopPropagation()}
-          style={{ cursor: 'default' }}
-        >
+          {/* 底部文字 */}
           <div
-            className="p-8 max-w-md mx-4 text-center"
-            style={{ backgroundColor: style.backgroundColor }}
+            className="fixed bottom-8 left-8 right-8 flex items-end justify-between gap-8 opacity-60 pointer-events-none"
+            style={{
+              color: style.textColor,
+              fontSize: style.fontSizes?.bottomText || 14,
+              fontWeight: fontWeightMap[style.fontWeights?.bottomText || 'normal']
+            }}
           >
-            <div
-              className="w-12 h-12 flex items-center justify-center mx-auto mb-4"
-              style={{ border: `1px solid ${style.textColor}40` }}
-            >
-              <AlertTriangle className="w-6 h-6" style={{ color: style.textColor }} />
-            </div>
-            <h3
-              className={`text-lg mb-4 whitespace-pre-line ${alignClassMap[style.textAligns?.centerText || 'center']}`}
-              style={{ color: style.textColor }}
-            >
-              {style.closeScreenPrompt}
-            </h3>
-            <p className="text-sm opacity-60 mb-6" style={{ color: style.textColor }}>
-              点击"已关闭"继续操作，或点击背景取消
-            </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setShowClosePrompt(false)}
-                className="px-6 py-2 text-sm opacity-60 hover:opacity-100 transition-opacity"
-                style={{ color: style.textColor, border: `1px solid ${style.textColor}30` }}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmClose}
-                className="px-6 py-2 text-sm font-medium transition-colors"
-                style={{ backgroundColor: style.textColor, color: style.backgroundColor }}
-              >
-                已关闭
-              </button>
-            </div>
+            <span className="whitespace-pre-line text-left max-w-[45%]">
+              {style.bottomLeftText}
+            </span>
+            <span className="whitespace-pre-line text-right max-w-[45%]">
+              {style.bottomRightText}
+            </span>
           </div>
-        </div>
-      )}
 
-      {/* 解锁弹窗 - 第二步 */}
-      {showUnlockModal && !unlocked && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={(e) => e.stopPropagation()}
-          style={{ cursor: 'default' }}
-        >
-          <div className="w-80" style={{ backgroundColor: style.backgroundColor }}>
+          {/* 关闭设备提示 - 第一步 */}
+          {showClosePrompt && (
             <div
-              className="flex items-center justify-between p-4 border-b"
-              style={{ borderColor: `${style.textColor}20` }}
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-40"
+              onClick={(e) => e.stopPropagation()}
+              style={{ cursor: 'default' }}
             >
-              <span className="text-sm font-medium" style={{ color: style.textColor }}>
-                输入密码
-              </span>
-              {attemptCount > 0 && (
-                <span className="text-xs opacity-50" style={{ color: style.textColor }}>
-                  第 {attemptCount} 次
-                </span>
-              )}
-              <button
-                onClick={() => {
-                  setShowUnlockModal(false)
-                  setUnlockReady(false)
-                  setPin('')
-                  setError('')
-                }}
-                className="p-1 opacity-50 hover:opacity-100 transition-opacity"
-                style={{ color: style.textColor }}
+              <div
+                className="p-8 max-w-md mx-4 text-center"
+                style={{ backgroundColor: style.backgroundColor }}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {/* 密码显示 */}
-              <div className="flex justify-center gap-2 mb-6">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div
-                    key={i}
-                    className="w-10 h-12 flex items-center justify-center text-lg font-bold border-2 transition-all"
-                    style={{
-                      borderColor: error
-                        ? '#ef4444'
-                        : i < pin.length
-                          ? style.textColor
-                          : `${style.textColor}30`,
-                      backgroundColor: i < pin.length ? `${style.textColor}15` : 'transparent',
-                      color: style.textColor
-                    }}
-                  >
-                    {pin[i] ? '●' : ''}
-                  </div>
-                ))}
-              </div>
-
-              {/* 错误提示 */}
-              {error && (
                 <div
-                  className="mb-4 p-3 text-sm text-center"
-                  style={{ backgroundColor: '#ef444420', color: '#ef4444' }}
+                  className="w-12 h-12 flex items-center justify-center mx-auto mb-4"
+                  style={{ border: `1px solid ${style.textColor}40` }}
                 >
-                  {error}
+                  <AlertTriangle className="w-6 h-6" style={{ color: style.textColor }} />
                 </div>
-              )}
-
-              {/* 加载中 */}
-              {isVerifying && (
-                <div className="mb-4 text-center">
-                  <div
-                    className="inline-block w-5 h-5 border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: style.textColor, borderTopColor: 'transparent' }}
-                  />
-                  <p className="text-xs mt-2 opacity-60" style={{ color: style.textColor }}>
-                    验证中...
-                  </p>
+                <h3
+                  className={`text-lg mb-4 whitespace-pre-line ${alignClassMap[style.textAligns?.centerText || 'center']}`}
+                  style={{ color: style.textColor }}
+                >
+                  {style.closeScreenPrompt}
+                </h3>
+                <p className="text-sm opacity-60 mb-6" style={{ color: style.textColor }}>
+                  点击"已关闭"继续操作，或点击背景取消
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setShowClosePrompt(false)}
+                    className="px-6 py-2 text-sm opacity-60 hover:opacity-100 transition-opacity"
+                    style={{ color: style.textColor, border: `1px solid ${style.textColor}30` }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleConfirmClose}
+                    className="px-6 py-2 text-sm font-medium transition-colors"
+                    style={{ backgroundColor: style.textColor, color: style.backgroundColor }}
+                  >
+                    已关闭
+                  </button>
                 </div>
-              )}
-
-              {/* 数字键盘 */}
-              <Keypad
-                onKeyPress={handleKeyPress}
-                onDelete={handleDelete}
-                onClear={handleClear}
-                textColor={style.textColor}
-              />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* 解锁成功 */}
-      {unlocked && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="p-10 text-center" style={{ backgroundColor: style.backgroundColor }}>
+          {/* 解锁弹窗 - 第二步 */}
+          {showUnlockModal && !unlocked && (
             <div
-              className="w-16 h-16 flex items-center justify-center mx-auto mb-4"
-              style={{ backgroundColor: '#22c55e' }}
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+              onClick={(e) => e.stopPropagation()}
+              style={{ cursor: 'default' }}
             >
-              <svg
-                className="w-8 h-8 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <div className="w-80" style={{ backgroundColor: style.backgroundColor }}>
+                <div
+                  className="flex items-center justify-between p-4 border-b"
+                  style={{ borderColor: `${style.textColor}20` }}
+                >
+                  <span className="text-sm font-medium" style={{ color: style.textColor }}>
+                    输入密码
+                  </span>
+                  {attemptCount > 0 && (
+                    <span className="text-xs opacity-50" style={{ color: style.textColor }}>
+                      第 {attemptCount} 次
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowUnlockModal(false)
+                      setUnlockReady(false)
+                      setPin('')
+                      setError('')
+                    }}
+                    className="p-1 opacity-50 hover:opacity-100 transition-opacity"
+                    style={{ color: style.textColor }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {/* 密码显示 */}
+                  <div className="flex justify-center gap-2 mb-6">
+                    {Array.from({ length: 6 }, (_, i) => (
+                      <div
+                        key={i}
+                        className="w-10 h-12 flex items-center justify-center text-lg font-bold border-2 transition-all"
+                        style={{
+                          borderColor: error
+                            ? '#ef4444'
+                            : i < pin.length
+                              ? style.textColor
+                              : `${style.textColor}30`,
+                          backgroundColor: i < pin.length ? `${style.textColor}15` : 'transparent',
+                          color: style.textColor
+                        }}
+                      >
+                        {pin[i] ? '●' : ''}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 错误提示 */}
+                  {error && (
+                    <div
+                      className="mb-4 p-3 text-sm text-center"
+                      style={{ backgroundColor: '#ef444420', color: '#ef4444' }}
+                    >
+                      {error}
+                    </div>
+                  )}
+
+                  {/* 加载中 */}
+                  {isVerifying && (
+                    <div className="mb-4 text-center">
+                      <div
+                        className="inline-block w-5 h-5 border-2 border-t-transparent animate-spin"
+                        style={{ borderColor: style.textColor, borderTopColor: 'transparent' }}
+                      />
+                      <p className="text-xs mt-2 opacity-60" style={{ color: style.textColor }}>
+                        验证中...
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 数字键盘 */}
+                  <Keypad
+                    onKeyPress={handleKeyPress}
+                    onDelete={handleDelete}
+                    onClear={handleClear}
+                    textColor={style.textColor}
+                  />
+                </div>
+              </div>
             </div>
-            <h3 className="text-lg font-medium mb-1" style={{ color: style.textColor }}>
-              解锁成功
-            </h3>
-            <p className="text-sm opacity-60" style={{ color: style.textColor }}>
-              自动锁屏已暂停
-            </p>
-          </div>
-        </div>
-      )}
+          )}
+
+          {/* 解锁成功 */}
+          {unlocked && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="p-10 text-center" style={{ backgroundColor: style.backgroundColor }}>
+                <div
+                  className="w-16 h-16 flex items-center justify-center mx-auto mb-4"
+                  style={{ backgroundColor: '#22c55e' }}
+                >
+                  <svg
+                    className="w-8 h-8 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium mb-1" style={{ color: style.textColor }}>
+                  解锁成功
+                </h3>
+                <p className="text-sm opacity-60" style={{ color: style.textColor }}>
+                  自动锁屏已暂停
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

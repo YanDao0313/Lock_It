@@ -84,6 +84,37 @@ export interface PasswordConfig {
   totpDeviceName?: string
 }
 
+export interface StartupConfig {
+  autoLaunch: boolean
+}
+
+export interface UpdateConfig {
+  checkOnStartup: boolean
+  autoDownload: boolean
+  autoInstallOnQuit: boolean
+}
+
+export interface RuntimeInfo {
+  platform: string
+  appVersion: string
+  autoLaunchSupported: boolean
+  isPackaged: boolean
+}
+
+export interface UpdateStatus {
+  status:
+    | 'idle'
+    | 'disabled'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  version?: string
+}
+
 // ============================================================================
 // API 定义
 // ============================================================================
@@ -94,6 +125,8 @@ export interface API {
     schedule?: WeeklySchedule
     style?: Partial<StyleConfig>
     selectedCamera?: string
+    startup?: StartupConfig
+    update?: UpdateConfig
   }) => Promise<boolean>
 
   // 配置管理
@@ -102,7 +135,11 @@ export interface API {
     schedule: WeeklySchedule
     style: StyleConfig
     selectedCamera?: string
+    startup: StartupConfig
+    update: UpdateConfig
   }>
+
+  getRuntimeInfo: () => Promise<RuntimeInfo>
 
   // 样式获取（给锁屏界面用）
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>
@@ -164,6 +201,10 @@ export interface API {
 
   // 设置窗口关闭结果
   respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
+
+  checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
+  getUpdateStatus: () => Promise<UpdateStatus>
+  installDownloadedUpdate: () => Promise<boolean>
 }
 
 // ============================================================================
@@ -175,6 +216,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // 配置管理
   getConfig: () => ipcRenderer.invoke('get-config'),
+  getRuntimeInfo: () => ipcRenderer.invoke('get-runtime-info'),
 
   // 样式获取
   getStyle: () => ipcRenderer.invoke('get-style'),
@@ -230,7 +272,11 @@ contextBridge.exposeInMainWorld('api', {
 
   // 设置窗口关闭结果
   respondSettingsClose: (result: 'proceed' | 'cancel') =>
-    ipcRenderer.invoke('settings-close-response', result)
+    ipcRenderer.invoke('settings-close-response', result),
+
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  installDownloadedUpdate: () => ipcRenderer.invoke('install-downloaded-update')
 } as API)
 
 // 类型声明

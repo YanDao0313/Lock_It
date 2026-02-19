@@ -61,6 +61,37 @@ export interface PasswordConfig {
   totpDeviceName?: string
 }
 
+export interface StartupConfig {
+  autoLaunch: boolean
+}
+
+export interface UpdateConfig {
+  checkOnStartup: boolean
+  autoDownload: boolean
+  autoInstallOnQuit: boolean
+}
+
+export interface RuntimeInfo {
+  platform: string
+  appVersion: string
+  autoLaunchSupported: boolean
+  isPackaged: boolean
+}
+
+export interface UpdateStatus {
+  status:
+    | 'idle'
+    | 'disabled'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  version?: string
+}
+
 export interface API {
   getConfig: () => Promise<{
     password: PasswordConfig
@@ -75,13 +106,18 @@ export interface API {
     }
     style: StyleConfig
     selectedCamera?: string
+    startup: StartupConfig
+    update: UpdateConfig
   }>
   saveConfig: (config: {
     password?: PasswordConfig
     schedule?: any
     style?: Partial<StyleConfig>
     selectedCamera?: string
+    startup?: StartupConfig
+    update?: UpdateConfig
   }) => Promise<boolean>
+  getRuntimeInfo: () => Promise<RuntimeInfo>
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>
   verifyPassword: (password: string) => Promise<boolean>
   verifyPasswordWithMethod: (
@@ -111,6 +147,9 @@ export interface API {
   setSettingsDirty: (dirty: boolean) => Promise<boolean>
   onSettingsCloseAttempt: (callback: () => void) => void
   respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
+  checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
+  getUpdateStatus: () => Promise<UpdateStatus>
+  installDownloadedUpdate: () => Promise<boolean>
 }
 
 declare global {

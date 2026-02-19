@@ -19,7 +19,10 @@ import {
   ChevronRight,
   Calendar,
   Eye,
-  Aperture
+  Aperture,
+  Info,
+  Power,
+  RefreshCw
 } from 'lucide-react'
 
 // ============================================================================
@@ -104,6 +107,37 @@ interface UnlockRecord {
 interface CameraDevice {
   deviceId: string
   label: string
+}
+
+interface StartupConfig {
+  autoLaunch: boolean
+}
+
+interface UpdateConfig {
+  checkOnStartup: boolean
+  autoDownload: boolean
+  autoInstallOnQuit: boolean
+}
+
+interface RuntimeInfo {
+  platform: string
+  appVersion: string
+  autoLaunchSupported: boolean
+  isPackaged: boolean
+}
+
+interface UpdateStatus {
+  status:
+    | 'idle'
+    | 'disabled'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  version?: string
 }
 
 // ============================================================================
@@ -1273,13 +1307,15 @@ function CameraSection({
 // 主组件
 // ============================================================================
 export default function Settings() {
-  type SettingsTab = 'schedule' | 'password' | 'style' | 'photos' | 'camera'
+  type SettingsTab = 'schedule' | 'password' | 'style' | 'photos' | 'camera' | 'about'
   type PendingAction = { type: 'tab'; nextTab: SettingsTab } | { type: 'close' } | null
   type SavedSettingsState = {
     password: PasswordConfig
     schedule: WeeklySchedule
     style: StyleConfig
     selectedCamera: string | null
+    startup: StartupConfig
+    update: UpdateConfig
   }
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('schedule')
@@ -1319,6 +1355,20 @@ export default function Settings() {
     fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
   })
   const [selectedCamera, setSelectedCamera] = useState<string | undefined>(undefined)
+  const [startup, setStartup] = useState<StartupConfig>({ autoLaunch: true })
+  const [update, setUpdate] = useState<UpdateConfig>({
+    checkOnStartup: true,
+    autoDownload: true,
+    autoInstallOnQuit: true
+  })
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null)
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
+    status: 'idle',
+    message: '等待检查更新'
+  })
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  const [showFullPreview, setShowFullPreview] = useState(false)
+  const [previewNow, setPreviewNow] = useState<Date>(new Date())
   const [selectedDay, setSelectedDay] = useState<keyof WeeklySchedule>('monday')
   const [previewMode, setPreviewMode] = useState<'dark' | 'light'>('dark')
 
@@ -1328,7 +1378,9 @@ export default function Settings() {
     password,
     schedule,
     style,
-    selectedCamera: selectedCamera ?? null
+    selectedCamera: selectedCamera ?? null,
+    startup,
+    update
   })
 
   const serializeSettingsState = (state: SavedSettingsState): string => JSON.stringify(state)
@@ -1402,20 +1454,47 @@ export default function Settings() {
             fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
           }
       const nextSelectedCamera = config.selectedCamera ?? null
+      const nextStartup: StartupConfig = config.startup || { autoLaunch: true }
+      const nextUpdate: UpdateConfig = config.update || {
+        checkOnStartup: true,
+        autoDownload: true,
+        autoInstallOnQuit: true
+      }
 
       setPassword(nextPassword)
       setSchedule(nextSchedule)
       setStyle(nextStyle)
       setSelectedCamera(nextSelectedCamera || undefined)
+      setStartup(nextStartup)
+      setUpdate(nextUpdate)
       setSavedState(
         clone({
           password: nextPassword,
           schedule: nextSchedule,
           style: nextStyle,
-          selectedCamera: nextSelectedCamera
+          selectedCamera: nextSelectedCamera,
+          startup: nextStartup,
+          update: nextUpdate
         })
       )
     })
+
+    window.api
+      .getRuntimeInfo()
+      .then((info) => setRuntimeInfo(info))
+      .catch(console.error)
+
+    window.api
+      .getUpdateStatus()
+      .then((status) => setUpdateStatus(status))
+      .catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPreviewNow(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -1436,7 +1515,7 @@ export default function Settings() {
   const handleSave = async (): Promise<boolean> => {
     setIsLoading(true)
     try {
-      await window.api.saveConfig({ password, schedule, style, selectedCamera })
+      await window.api.saveConfig({ password, schedule, style, selectedCamera, startup, update })
       setSavedState(clone(getCurrentSettingsState()))
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
@@ -1455,6 +1534,70 @@ export default function Settings() {
     setSchedule(clone(savedState.schedule))
     setStyle(clone(savedState.style))
     setSelectedCamera(savedState.selectedCamera || undefined)
+    setStartup(clone(savedState.startup))
+    setUpdate(clone(savedState.update))
+  }
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true)
+    try {
+      const result = await window.api.checkForUpdates()
+      setUpdateStatus({
+        status: (result.status as UpdateStatus['status']) || 'idle',
+        message: result.message,
+        version: result.version
+      })
+    } catch (error) {
+      setUpdateStatus({ status: 'error', message: '检查更新失败' })
+    } finally {
+      setIsCheckingUpdate(false)
+    }
+  }
+
+  const handleInstallDownloadedUpdate = async () => {
+    try {
+      const ok = await window.api.installDownloadedUpdate()
+      if (!ok) {
+        setUpdateStatus((prev) => ({
+          ...prev,
+          message: '暂无可安装更新，请先检查并下载更新'
+        }))
+      }
+    } catch (error) {
+      setUpdateStatus({ status: 'error', message: '安装更新失败' })
+    }
+  }
+
+  const formatPreviewTime = (date: Date, format: string): string => {
+    if (format === 'YYYY-MM-DD HH:mm') {
+      const d = date.toLocaleDateString('zh-CN')
+      const t = date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+      return `${d} ${t}`
+    }
+
+    if (format === 'HH:mm') {
+      return date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+    }
+
+    if (format === 'hh:mm A') {
+      return date.toLocaleTimeString('zh-CN', { hour12: true, hour: '2-digit', minute: '2-digit' })
+    }
+
+    if (format === 'hh:mm:ss A') {
+      return date.toLocaleTimeString('zh-CN', {
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+
+    return date.toLocaleTimeString('zh-CN', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
   }
 
   const handleTabChange = (nextTab: SettingsTab) => {
@@ -1537,13 +1680,26 @@ export default function Settings() {
   }
 
   const previewColors = getPreviewColors()
+  const previewTimeText = formatPreviewTime(previewNow, style.timeFormat)
+  const canControlAutoLaunch = runtimeInfo ? runtimeInfo.autoLaunchSupported : true
+  const previewTimePositionClass =
+    style.timePosition === 'top-left'
+      ? 'top-4 left-4'
+      : style.timePosition === 'top-right'
+        ? 'top-4 right-4'
+        : style.timePosition === 'bottom-left'
+          ? 'bottom-4 left-4'
+          : style.timePosition === 'bottom-right'
+            ? 'bottom-4 right-4'
+            : ''
 
   const navItems: { id: typeof activeTab; label: string; icon: React.ElementType }[] = [
     { id: 'schedule', label: '锁屏时段', icon: Calendar },
     { id: 'password', label: '密码', icon: Lock },
     { id: 'style', label: '界面样式', icon: Eye },
     { id: 'camera', label: '摄像头', icon: Aperture },
-    { id: 'photos', label: '解锁记录', icon: Image }
+    { id: 'photos', label: '解锁记录', icon: Image },
+    { id: 'about', label: '关于', icon: Info }
   ]
 
   return (
@@ -2046,52 +2202,78 @@ export default function Settings() {
                     >
                       浅色
                     </Button>
+                    <Button variant="secondary" size="sm" onClick={() => setShowFullPreview(true)}>
+                      全屏仿真预览
+                    </Button>
                   </div>
-                  <div
-                    className="p-8 text-center min-h-[180px] flex flex-col justify-center"
-                    style={{
-                      backgroundColor: previewColors.backgroundColor,
-                      color: previewColors.textColor
-                    }}
-                  >
-                    {style.timePosition === 'center' && (
-                      <div
-                        className="font-mono mb-3 opacity-60"
-                        style={{ fontSize: style.fontSizes.timeText }}
-                      >
-                        {new Date().toLocaleTimeString()}
+                  <div className="border border-neutral-200 overflow-hidden">
+                    <div className="h-7 px-3 bg-neutral-100 text-xs text-neutral-500 flex items-center">
+                      Lock It 锁屏预览
+                    </div>
+                    <div
+                      className="aspect-video relative px-6 py-5"
+                      style={{
+                        backgroundColor: previewColors.backgroundColor,
+                        color: previewColors.textColor
+                      }}
+                    >
+                      {style.timePosition !== 'hidden' && style.timePosition !== 'center' && (
+                        <div
+                          className={`absolute font-mono opacity-75 ${previewTimePositionClass}`}
+                          style={{ fontSize: Math.max(10, Math.min(style.fontSizes.timeText, 20)) }}
+                        >
+                          {previewTimeText}
+                        </div>
+                      )}
+
+                      <div className="h-full flex flex-col justify-center">
+                        {style.timePosition === 'center' && (
+                          <div
+                            className="font-mono mb-3 opacity-70"
+                            style={{
+                              fontSize: Math.max(10, Math.min(style.fontSizes.timeText, 22)),
+                              textAlign: 'center'
+                            }}
+                          >
+                            {previewTimeText}
+                          </div>
+                        )}
+                        <div
+                          className="whitespace-pre-line leading-tight"
+                          style={{
+                            fontSize: Math.max(14, Math.min(style.fontSizes.centerText, 34)),
+                            textAlign: style.textAligns.centerText,
+                            fontWeight: style.fontWeights.centerText
+                          }}
+                        >
+                          {style.centerText || '主标题'}
+                        </div>
+                        <div
+                          className="opacity-85 whitespace-pre-line mt-2"
+                          style={{
+                            fontSize: Math.max(12, Math.min(style.fontSizes.subText, 22)),
+                            textAlign: style.textAligns.subText,
+                            fontWeight: style.fontWeights.subText
+                          }}
+                        >
+                          {style.subText || '副标题'}
+                        </div>
                       </div>
-                    )}
-                    <div
-                      className="whitespace-pre-line mb-2"
-                      style={{
-                        fontSize: Math.min(style.fontSizes.centerText, 28),
-                        textAlign: style.textAligns.centerText,
-                        fontWeight: style.fontWeights.centerText
-                      }}
-                    >
-                      {style.centerText || '主标题'}
-                    </div>
-                    <div
-                      className="opacity-80 whitespace-pre-line"
-                      style={{
-                        fontSize: Math.min(style.fontSizes.subText, 18),
-                        textAlign: style.textAligns.subText,
-                        fontWeight: style.fontWeights.subText
-                      }}
-                    >
-                      {style.subText || '副标题'}
-                    </div>
-                    <div
-                      className="grid grid-cols-2 gap-4 mt-6 opacity-60"
-                      style={{
-                        fontSize: Math.min(style.fontSizes.bottomText, 12),
-                        textAlign: style.textAligns.bottomText,
-                        fontWeight: style.fontWeights.bottomText
-                      }}
-                    >
-                      <span>{style.bottomLeftText}</span>
-                      <span>{style.bottomRightText}</span>
+
+                      <div
+                        className="absolute bottom-4 left-4 right-4 grid grid-cols-2 gap-3 opacity-80"
+                        style={{
+                          fontSize: Math.max(10, Math.min(style.fontSizes.bottomText, 16)),
+                          fontWeight: style.fontWeights.bottomText
+                        }}
+                      >
+                        <span className="whitespace-pre-line" style={{ textAlign: style.textAligns.bottomText }}>
+                          {style.bottomLeftText || '左下角文字'}
+                        </span>
+                        <span className="whitespace-pre-line text-right" style={{ textAlign: style.textAligns.bottomText }}>
+                          {style.bottomRightText || '右下角文字'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -2119,9 +2301,207 @@ export default function Settings() {
                 <PhotosSection />
               </div>
             )}
+
+            {activeTab === 'about' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-medium mb-1">关于</h2>
+                  <p className="text-sm text-neutral-500">应用信息、自动启动与软件更新配置</p>
+                </div>
+
+                <Card title="应用信息">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-neutral-500">版本</p>
+                      <p className="text-neutral-900 mt-1">{runtimeInfo?.appVersion || '未知'}</p>
+                    </div>
+                    <div>
+                      <p className="text-neutral-500">平台</p>
+                      <p className="text-neutral-900 mt-1">{runtimeInfo?.platform || '未知'}</p>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card title="自动启动" subtitle="系统登录后自动运行 Lock It">
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 text-sm">
+                      <Toggle
+                        checked={canControlAutoLaunch ? startup.autoLaunch : false}
+                        onChange={(checked) => {
+                          if (!canControlAutoLaunch) return
+                          setStartup((s) => ({ ...s, autoLaunch: checked }))
+                        }}
+                      />
+                      启用自动启动
+                    </label>
+                    {runtimeInfo && !runtimeInfo.autoLaunchSupported && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2">
+                        当前平台暂不支持自动启动配置。
+                      </p>
+                    )}
+                  </div>
+                </Card>
+
+                <Card title="软件更新" subtitle="配置自动更新行为并可手动检查更新">
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-3 text-sm">
+                      <Toggle
+                        checked={update.checkOnStartup}
+                        onChange={(checked) =>
+                          setUpdate((u) => ({
+                            ...u,
+                            checkOnStartup: checked
+                          }))
+                        }
+                      />
+                      启动时自动检查更新
+                    </label>
+
+                    <label className="flex items-center gap-3 text-sm">
+                      <Toggle
+                        checked={update.autoDownload}
+                        onChange={(checked) =>
+                          setUpdate((u) => ({
+                            ...u,
+                            autoDownload: checked
+                          }))
+                        }
+                      />
+                      自动下载更新
+                    </label>
+
+                    <label className="flex items-center gap-3 text-sm">
+                      <Toggle
+                        checked={update.autoInstallOnQuit}
+                        onChange={(checked) =>
+                          setUpdate((u) => ({
+                            ...u,
+                            autoInstallOnQuit: checked
+                          }))
+                        }
+                      />
+                      退出时自动安装已下载更新
+                    </label>
+
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void handleCheckForUpdates()}
+                        disabled={isCheckingUpdate}
+                      >
+                        {isCheckingUpdate ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+                            检查中
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-1.5" />
+                            立即检查更新
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => void handleInstallDownloadedUpdate()}
+                        disabled={updateStatus.status !== 'downloaded'}
+                      >
+                        <Power className="w-4 h-4 mr-1.5" />
+                        立即安装已下载更新
+                      </Button>
+                    </div>
+
+                    <div className="px-3 py-2 bg-neutral-50 border border-neutral-200 text-xs text-neutral-600">
+                      <p className="font-medium text-neutral-700 mb-1">更新状态</p>
+                      <p>{updateStatus.message}</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
           </div>
         </main>
       </div>
+
+      {showFullPreview && (
+        <div className="fixed inset-0 z-40" style={{ backgroundColor: previewColors.backgroundColor }}>
+          <button
+            onClick={() => setShowFullPreview(false)}
+            className="absolute top-4 right-4 z-50 px-3 py-2 text-sm border border-white/30 text-white/90 hover:bg-white/10"
+          >
+            <X className="w-4 h-4 inline-block mr-1" />
+            关闭仿真预览
+          </button>
+
+          {style.timePosition !== 'hidden' && style.timePosition !== 'center' && (
+            <div
+              className={`absolute font-mono opacity-70 ${
+                style.timePosition === 'top-left'
+                  ? 'top-8 left-8'
+                  : style.timePosition === 'top-right'
+                    ? 'top-8 right-8'
+                    : style.timePosition === 'bottom-left'
+                      ? 'bottom-20 left-8'
+                      : 'bottom-20 right-8'
+              }`}
+              style={{ color: previewColors.textColor, fontSize: style.fontSizes.timeText }}
+            >
+              {previewTimeText}
+            </div>
+          )}
+
+          <div className="h-full flex flex-col justify-center px-12" style={{ color: previewColors.textColor }}>
+            {style.timePosition === 'center' && (
+              <div
+                className="font-mono mb-5 opacity-70"
+                style={{ fontSize: style.fontSizes.timeText, textAlign: 'center' }}
+              >
+                {previewTimeText}
+              </div>
+            )}
+            <div
+              className="whitespace-pre-line"
+              style={{
+                fontSize: style.fontSizes.centerText,
+                textAlign: style.textAligns.centerText,
+                fontWeight: style.fontWeights.centerText
+              }}
+            >
+              {style.centerText || '主标题'}
+            </div>
+            <div
+              className="opacity-85 whitespace-pre-line mt-3"
+              style={{
+                fontSize: style.fontSizes.subText,
+                textAlign: style.textAligns.subText,
+                fontWeight: style.fontWeights.subText
+              }}
+            >
+              {style.subText || '副标题'}
+            </div>
+          </div>
+
+          <div
+            className="absolute bottom-8 left-8 right-8 grid grid-cols-2 gap-4 opacity-80"
+            style={{ color: previewColors.textColor, fontSize: style.fontSizes.bottomText }}
+          >
+            <span
+              className="whitespace-pre-line"
+              style={{ textAlign: style.textAligns.bottomText, fontWeight: style.fontWeights.bottomText }}
+            >
+              {style.bottomLeftText || '左下角文字'}
+            </span>
+            <span
+              className="whitespace-pre-line text-right"
+              style={{ textAlign: style.textAligns.bottomText, fontWeight: style.fontWeights.bottomText }}
+            >
+              {style.bottomRightText || '右下角文字'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {pendingAction && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">

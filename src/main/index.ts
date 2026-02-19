@@ -87,6 +87,18 @@ interface AppConfig {
   schedule: WeeklySchedule
   style: StyleConfig
   selectedCamera?: string
+  startup?: StartupConfig
+  update?: UpdateConfig
+}
+
+interface StartupConfig {
+  autoLaunch: boolean
+}
+
+interface UpdateConfig {
+  checkOnStartup: boolean
+  autoDownload: boolean
+  autoInstallOnQuit: boolean
 }
 
 interface UnlockRecord {
@@ -128,6 +140,24 @@ let autoLockEnabled = true // 解锁后设为false，停止自动锁屏
 let settingsDirty = false
 let isHandlingMainClose = false
 let pendingSettingsCloseResolver: ((result: 'proceed' | 'cancel') => void) | null = null
+let updateCheckTimer: NodeJS.Timeout | null = null
+
+const updaterState: {
+  status:
+    | 'idle'
+    | 'disabled'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  version?: string
+} = {
+  status: 'idle',
+  message: '等待检查更新'
+}
 
 // 默认配置
 const defaultSchedule = (): WeeklySchedule => ({
@@ -177,6 +207,16 @@ const defaultStyle = (): StyleConfig => ({
   fontWeights: defaultFontWeights()
 })
 
+const defaultStartup = (): StartupConfig => ({
+  autoLaunch: true
+})
+
+const defaultUpdate = (): UpdateConfig => ({
+  checkOnStartup: true,
+  autoDownload: true,
+  autoInstallOnQuit: true
+})
+
 function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
   const defaults = defaultStyle()
   const source = style || {}
@@ -195,6 +235,115 @@ function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
     fontWeights: {
       ...defaults.fontWeights,
       ...(source.fontWeights || {})
+    }
+  }
+}
+
+function normalizeStartupConfig(startup?: Partial<StartupConfig>): StartupConfig {
+  const defaults = defaultStartup()
+  return {
+    autoLaunch: typeof startup?.autoLaunch === 'boolean' ? startup.autoLaunch : defaults.autoLaunch
+  }
+}
+
+function normalizeUpdateConfig(update?: Partial<UpdateConfig>): UpdateConfig {
+  const defaults = defaultUpdate()
+  return {
+    checkOnStartup:
+      typeof update?.checkOnStartup === 'boolean' ? update.checkOnStartup : defaults.checkOnStartup,
+    autoDownload:
+      typeof update?.autoDownload === 'boolean' ? update.autoDownload : defaults.autoDownload,
+    autoInstallOnQuit:
+      typeof update?.autoInstallOnQuit === 'boolean'
+        ? update.autoInstallOnQuit
+        : defaults.autoInstallOnQuit
+  }
+}
+
+function isAutoLaunchSupported(): boolean {
+  return process.platform === 'win32' || process.platform === 'darwin'
+}
+
+function applyAutoLaunchSetting(autoLaunch: boolean): boolean {
+  if (!isAutoLaunchSupported()) {
+    return false
+  }
+
+  app.setLoginItemSettings({
+    openAtLogin: autoLaunch,
+    ...(process.platform === 'darwin' ? { openAsHidden: true } : {})
+  })
+
+  return true
+}
+
+function syncStartupSettingFromConfig(): void {
+  const startup = normalizeStartupConfig(store.get('startup') as Partial<StartupConfig>)
+  store.set('startup', startup)
+  applyAutoLaunchSetting(startup.autoLaunch)
+}
+
+function applyUpdaterConfigFromStore(): UpdateConfig {
+  const update = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
+  store.set('update', update)
+  autoUpdater.autoDownload = update.autoDownload
+  autoUpdater.autoInstallOnAppQuit = update.autoInstallOnQuit
+  return update
+}
+
+async function runUpdateCheck(manual = false): Promise<{
+  ok: boolean
+  status: string
+  message: string
+  version?: string
+}> {
+  if (is.dev) {
+    return {
+      ok: false,
+      status: 'disabled',
+      message: '开发模式下不检查更新'
+    }
+  }
+
+  try {
+    updaterState.status = 'checking'
+    updaterState.message = '正在检查更新'
+
+    const result = await autoUpdater.checkForUpdates()
+    const targetVersion = result?.updateInfo?.version
+
+    if (targetVersion) {
+      updaterState.status = 'available'
+      updaterState.message = `发现新版本 ${targetVersion}`
+      updaterState.version = targetVersion
+      return {
+        ok: true,
+        status: 'available',
+        message: `发现新版本 ${targetVersion}`,
+        version: targetVersion
+      }
+    }
+
+    updaterState.status = 'not-available'
+    updaterState.message = '当前已是最新版本'
+    updaterState.version = undefined
+
+    return {
+      ok: true,
+      status: 'not-available',
+      message: '当前已是最新版本'
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    updaterState.status = 'error'
+    updaterState.message = `检查更新失败：${message}`
+    if (!manual) {
+      console.error('[updater] scheduled check failed:', error)
+    }
+    return {
+      ok: false,
+      status: 'error',
+      message: `检查更新失败：${message}`
     }
   }
 }
@@ -242,7 +391,9 @@ async function initModules(): Promise<void> {
       hasCompletedSetup: false,
       password: { type: 'fixed', fixedPassword: '123456' },
       schedule: defaultSchedule(),
-      style: defaultStyle()
+      style: defaultStyle(),
+      startup: defaultStartup(),
+      update: defaultUpdate()
     }
   })
 
@@ -728,25 +879,48 @@ function startScheduleChecker(): void {
 function setupAutoUpdater(): void {
   if (is.dev) {
     console.log('[updater] development mode, skip auto update check')
+    updaterState.status = 'disabled'
+    updaterState.message = '开发模式下不检查更新'
     return
   }
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  const updateConfig = applyUpdaterConfigFromStore()
+
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer)
+    updateCheckTimer = null
+  }
+
+  autoUpdater.removeAllListeners('checking-for-update')
+  autoUpdater.removeAllListeners('update-available')
+  autoUpdater.removeAllListeners('update-not-available')
+  autoUpdater.removeAllListeners('download-progress')
+  autoUpdater.removeAllListeners('update-downloaded')
+  autoUpdater.removeAllListeners('error')
 
   autoUpdater.on('checking-for-update', () => {
     console.log('[updater] checking for updates...')
+    updaterState.status = 'checking'
+    updaterState.message = '正在检查更新'
   })
 
   autoUpdater.on('update-available', (info) => {
     console.log(`[updater] update available: ${info.version}`)
+    updaterState.status = 'available'
+    updaterState.message = `发现新版本 ${info.version}`
+    updaterState.version = info.version
   })
 
   autoUpdater.on('update-not-available', () => {
     console.log('[updater] no updates available')
+    updaterState.status = 'not-available'
+    updaterState.message = '当前已是最新版本'
+    updaterState.version = undefined
   })
 
   autoUpdater.on('download-progress', (progress) => {
+    updaterState.status = 'downloading'
+    updaterState.message = `正在下载更新 ${progress.percent.toFixed(1)}%`
     console.log(
       `[updater] downloading: ${progress.percent.toFixed(1)}% (${progress.transferred}/${progress.total})`
     )
@@ -754,20 +928,29 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[updater] update downloaded: ${info.version}, will install on quit`)
+    updaterState.status = 'downloaded'
+    updaterState.message = `更新已下载：${info.version}`
+    updaterState.version = info.version
   })
 
   autoUpdater.on('error', (error) => {
     console.error('[updater] error:', error)
+    updaterState.status = 'error'
+    updaterState.message = `更新失败：${error.message}`
   })
 
-  void autoUpdater.checkForUpdates()
-
-  setInterval(
-    () => {
-      void autoUpdater.checkForUpdates()
-    },
-    6 * 60 * 60 * 1000
-  )
+  if (updateConfig.checkOnStartup) {
+    void runUpdateCheck()
+    updateCheckTimer = setInterval(
+      () => {
+        void runUpdateCheck()
+      },
+      6 * 60 * 60 * 1000
+    )
+  } else {
+    updaterState.status = 'idle'
+    updaterState.message = '已关闭自动检查更新'
+  }
 }
 
 function verifyPasswordAgainstConfig(inputPassword: string): PasswordVerifyResult {
@@ -827,12 +1010,18 @@ function setupIpcHandlers(): void {
   ipcMain.handle('get-config', () => {
     const style = normalizeStyle(store.get('style') as Partial<StyleConfig>)
     const password = normalizePasswordConfig(store.get('password') as PasswordConfig)
+    const startup = normalizeStartupConfig(store.get('startup') as Partial<StartupConfig>)
+    const update = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
     store.set('password', password)
+    store.set('startup', startup)
+    store.set('update', update)
     return {
       password,
       schedule: store.get('schedule'),
       style: style,
-      selectedCamera: store.get('selectedCamera')
+      selectedCamera: store.get('selectedCamera'),
+      startup,
+      update
     }
   })
 
@@ -861,7 +1050,43 @@ function setupIpcHandlers(): void {
       store.set('style', mergedStyle)
     }
     if (config.selectedCamera !== undefined) store.set('selectedCamera', config.selectedCamera)
+    if (config.startup) {
+      const startup = normalizeStartupConfig(config.startup)
+      store.set('startup', startup)
+      applyAutoLaunchSetting(startup.autoLaunch)
+    }
+    if (config.update) {
+      const update = normalizeUpdateConfig(config.update)
+      store.set('update', update)
+      if (!is.dev) {
+        setupAutoUpdater()
+      }
+    }
     return true
+  })
+
+  ipcMain.handle('get-runtime-info', () => {
+    return {
+      platform: process.platform,
+      appVersion: app.getVersion(),
+      autoLaunchSupported: isAutoLaunchSupported(),
+      isPackaged: app.isPackaged
+    }
+  })
+
+  ipcMain.handle('check-for-updates', async () => {
+    return runUpdateCheck(true)
+  })
+
+  ipcMain.handle('install-downloaded-update', () => {
+    if (is.dev) return false
+    if (updaterState.status !== 'downloaded') return false
+    autoUpdater.quitAndInstall()
+    return true
+  })
+
+  ipcMain.handle('get-update-status', () => {
+    return { ...updaterState }
   })
 
   // 获取样式（给锁屏界面用）
@@ -1142,6 +1367,7 @@ app
     })
 
     setupIpcHandlers()
+    syncStartupSettingFromConfig()
     setupAutoUpdater()
     createTray()
 

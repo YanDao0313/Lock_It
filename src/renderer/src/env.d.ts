@@ -61,6 +61,37 @@ interface PasswordConfig {
   totpDeviceName?: string
 }
 
+interface StartupConfig {
+  autoLaunch: boolean
+}
+
+interface UpdateConfig {
+  checkOnStartup: boolean
+  autoDownload: boolean
+  autoInstallOnQuit: boolean
+}
+
+interface RuntimeInfo {
+  platform: string
+  appVersion: string
+  autoLaunchSupported: boolean
+  isPackaged: boolean
+}
+
+interface UpdateStatus {
+  status:
+    | 'idle'
+    | 'disabled'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  version?: string
+}
+
 interface API {
   // 配置管理
   getConfig: () => Promise<{
@@ -76,13 +107,18 @@ interface API {
     }
     style: StyleConfig
     selectedCamera?: string
+    startup: StartupConfig
+    update: UpdateConfig
   }>
   saveConfig: (config: {
     password?: PasswordConfig
     schedule?: any
     style?: Partial<StyleConfig>
     selectedCamera?: string
+    startup?: StartupConfig
+    update?: UpdateConfig
   }) => Promise<boolean>
+  getRuntimeInfo: () => Promise<RuntimeInfo>
 
   // 样式获取
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>
@@ -126,6 +162,9 @@ interface API {
   setSettingsDirty: (dirty: boolean) => Promise<boolean>
   onSettingsCloseAttempt: (callback: () => void) => void
   respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
+  checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
+  getUpdateStatus: () => Promise<UpdateStatus>
+  installDownloadedUpdate: () => Promise<boolean>
 }
 
 declare global {
