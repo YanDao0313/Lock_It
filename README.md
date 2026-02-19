@@ -3,6 +3,13 @@
 `Lock It` 是一个基于 Electron + React + TypeScript 的桌面自动锁屏工具，适用于教室、实验室、办公室等场景。  
 **这是一个娱乐项目，请勿用于生产环境！**用于生产环境带来的一切后果由使用者自行承担、与项目开发者无关！
 
+## 多语文档
+
+- 简体中文（默认）：本文件
+- English (AI Translation)：[README.en-US.md](./README.en-US.md)
+- 日本語（AI 翻訳）：[README.ja-JP.md](./README.ja-JP.md)
+- 한국어（AI 번역）：[README.ko-KR.md](./README.ko-KR.md)
+
 ## 核心功能
 
 - 按周配置自动锁屏时段（支持每天多个时段）
@@ -27,11 +34,6 @@
 - qrcode `^1.5.4`
 
 ## 开发环境
-
-推荐：
-
-- VS Code
-- ESLint + Prettier
 
 安装依赖：
 

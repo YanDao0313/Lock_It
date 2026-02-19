@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Check, Shield, Calendar, KeyRound } from 'lucide-react'
 import QRCode from 'qrcode'
+import { AppLanguage, getDayNames, getLanguageOptions, normalizeLanguage, t } from './i18n'
 
 // ============================================================================
 // 类型定义
@@ -62,16 +63,6 @@ interface StyleConfig {
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
 }
-
-const dayNames: { key: keyof WeeklySchedule; label: string; short: string }[] = [
-  { key: 'monday', label: '周一', short: '一' },
-  { key: 'tuesday', label: '周二', short: '二' },
-  { key: 'wednesday', label: '周三', short: '三' },
-  { key: 'thursday', label: '周四', short: '四' },
-  { key: 'friday', label: '周五', short: '五' },
-  { key: 'saturday', label: '周六', short: '六' },
-  { key: 'sunday', label: '周日', short: '日' }
-]
 
 function generateDefaultTotpDeviceName(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -200,6 +191,7 @@ function Input({
 }
 
 export default function Setup() {
+  const [language, setLanguage] = useState<AppLanguage>('zh-CN')
   const [step, setStep] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [autoLaunch, setAutoLaunch] = useState(true)
@@ -223,12 +215,20 @@ export default function Setup() {
 
   const [style, setStyle] = useState<StyleConfig>(defaultStyle())
 
+  const dayNames = getDayNames(language) as {
+    key: keyof WeeklySchedule
+    label: string
+    short: string
+  }[]
+  const languageOptions = getLanguageOptions(language)
+
   const passwordError = useMemo(() => {
     if (!fixedPassword && !confirmPassword) return ''
-    if (!/^\d{6}$/.test(fixedPassword)) return '固定密码必须是6位数字'
-    if (confirmPassword && fixedPassword !== confirmPassword) return '两次输入的固定密码不一致'
+    if (!/^\d{6}$/.test(fixedPassword)) return t(language, 'setup.password.invalid')
+    if (confirmPassword && fixedPassword !== confirmPassword)
+      return t(language, 'setup.password.mismatch')
     return ''
-  }, [fixedPassword, confirmPassword])
+  }, [fixedPassword, confirmPassword, language])
 
   const hasValidPassword = /^\d{6}$/.test(fixedPassword) && fixedPassword === confirmPassword
 
@@ -246,6 +246,15 @@ export default function Setup() {
       .catch(() => {
         setAutoLaunchSupported(true)
       })
+
+    window.api
+      .getConfig()
+      .then((config) => {
+        setLanguage(normalizeLanguage(config.language))
+      })
+      .catch(() => {
+        setLanguage('zh-CN')
+      })
   }, [])
 
   const canProceed = () => {
@@ -258,7 +267,7 @@ export default function Setup() {
   const confirmTotpDeviceName = () => {
     const normalized = normalizedTotpDeviceName
     if (!normalized) {
-      setTotpError('设备标识名称不能为空')
+      setTotpError(t(language, 'setup.totp.emptyName'))
       return
     }
 
@@ -266,7 +275,7 @@ export default function Setup() {
       return
     }
 
-    const confirmed = window.confirm(`确认将设备标识锁定为“${normalized}”吗？锁定后不可更改。`)
+    const confirmed = window.confirm(t(language, 'setup.totp.confirmLock', { name: normalized }))
     if (!confirmed) return
 
     setTotpDeviceName(normalized)
@@ -278,7 +287,7 @@ export default function Setup() {
     setTotpError('')
 
     if (!isTotpDeviceConfirmed) {
-      setTotpError('请先确认设备标识名称，再进行扫码绑定')
+      setTotpError(t(language, 'setup.totp.confirmFirst'))
       return
     }
 
@@ -303,7 +312,7 @@ export default function Setup() {
       }
     } catch (e) {
       console.error('Generate TOTP secret failed:', e)
-      setTotpError('生成 TOTP 密钥失败，请重试')
+      setTotpError(t(language, 'setup.totp.generateFailed'))
     } finally {
       setTotpLoading(false)
     }
@@ -353,18 +362,27 @@ export default function Setup() {
         style,
         startup: {
           autoLaunch: autoLaunchSupported ? autoLaunch : false
-        }
+        },
+        language
       })
       await window.api.completeSetup()
     } catch (e) {
       console.error('Setup failed:', e)
-      alert('保存配置失败，请重试')
+      alert(t(language, 'common.saveFailed'))
     } finally {
       setIsSaving(false)
     }
   }
 
-  const steps = ['欢迎', '固定密码', '可选TOTP', '锁屏时段', '自动启动', '界面样式', '完成']
+  const steps = [
+    t(language, 'setup.steps.welcome'),
+    t(language, 'setup.steps.password'),
+    t(language, 'setup.steps.totp'),
+    t(language, 'setup.steps.schedule'),
+    t(language, 'setup.steps.startup'),
+    t(language, 'setup.steps.style'),
+    t(language, 'setup.steps.done')
+  ]
 
   return (
     <div className="h-dvh bg-neutral-50 text-neutral-900 flex items-center justify-center p-6">
@@ -372,11 +390,24 @@ export default function Setup() {
         <header className="h-14 px-6 border-b border-neutral-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Shield className="w-5 h-5 text-neutral-900" />
-            <h1 className="text-sm font-medium">首次配置向导</h1>
+            <h1 className="text-sm font-medium">{t(language, 'setup.title')}</h1>
           </div>
-          <span className="text-xs text-neutral-500">
-            第 {step + 1} / {steps.length} 步
-          </span>
+          <div className="flex items-center gap-3">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(normalizeLanguage(e.target.value))}
+              className="text-xs px-2 py-1 bg-white border border-neutral-300 text-neutral-700"
+            >
+              {languageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-neutral-500">
+              {t(language, 'setup.step', { current: step + 1, total: steps.length })}
+            </span>
+          </div>
         </header>
 
         <div className="px-6 py-4 border-b border-neutral-200 flex gap-1">
@@ -390,46 +421,59 @@ export default function Setup() {
 
         <main className="p-6 min-h-[460px]">
           {step === 0 && (
-            <Card title="欢迎" subtitle="完成以下步骤即可开始使用">
+            <Card
+              title={t(language, 'setup.welcome.title')}
+              subtitle={t(language, 'setup.welcome.subtitle')}
+            >
               <div className="space-y-3 text-sm text-neutral-700">
-                <p>• 必须设置固定密码（6位数字）</p>
-                <p>• 可选配置 TOTP 动态密码，增强安全性</p>
-                <p>• 设置锁屏时段与锁屏界面文案</p>
+                <p>{t(language, 'setup.welcome.line1')}</p>
+                <p>{t(language, 'setup.welcome.line2')}</p>
+                <p>{t(language, 'setup.welcome.line3')}</p>
               </div>
             </Card>
           )}
 
           {step === 1 && (
-            <Card title="固定密码（必填）" subtitle="固定密码是必选项，后续可叠加 TOTP">
+            <Card
+              title={t(language, 'setup.password.title')}
+              subtitle={t(language, 'setup.password.subtitle')}
+            >
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1.5">固定密码</label>
+                  <label className="block text-xs text-neutral-600 mb-1.5">
+                    {t(language, 'setup.password.label')}
+                  </label>
                   <Input
                     value={fixedPassword}
                     onChange={setFixedPassword}
-                    placeholder="输入6位数字"
+                    placeholder={t(language, 'setup.password.placeholder')}
                     type="password"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1.5">确认固定密码</label>
+                  <label className="block text-xs text-neutral-600 mb-1.5">
+                    {t(language, 'setup.password.confirm')}
+                  </label>
                   <Input
                     value={confirmPassword}
                     onChange={setConfirmPassword}
-                    placeholder="再次输入6位数字"
+                    placeholder={t(language, 'setup.password.confirmPlaceholder')}
                     type="password"
                   />
                 </div>
               </div>
               {passwordError && <p className="text-xs text-red-600 mt-3">{passwordError}</p>}
               {!passwordError && hasValidPassword && (
-                <p className="text-xs text-green-600 mt-3">固定密码设置完成</p>
+                <p className="text-xs text-green-600 mt-3">{t(language, 'setup.password.done')}</p>
               )}
             </Card>
           )}
 
           {step === 2 && (
-            <Card title="TOTP 动态密码（可选）" subtitle="开启后可通过固定密码或 TOTP 任一方式解锁">
+            <Card
+              title={t(language, 'setup.totp.title')}
+              subtitle={t(language, 'setup.totp.subtitle')}
+            >
               <div className="space-y-4">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -437,11 +481,13 @@ export default function Setup() {
                     checked={totpEnabled}
                     onChange={(e) => void handleToggleTotp(e.target.checked)}
                   />
-                  启用 TOTP 动态密码
+                  {t(language, 'setup.totp.enable')}
                 </label>
 
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1.5">设备标识名称</label>
+                  <label className="block text-xs text-neutral-600 mb-1.5">
+                    {t(language, 'setup.totp.device')}
+                  </label>
                   <Input
                     value={totpDeviceName}
                     onChange={(v) => {
@@ -451,7 +497,7 @@ export default function Setup() {
                       setTotpQrCodeDataUrl('')
                       setTotpError('')
                     }}
-                    placeholder="例如 A1B2"
+                    placeholder={t(language, 'setup.totp.example')}
                     disabled={isTotpDeviceLocked}
                   />
                 </div>
@@ -462,7 +508,9 @@ export default function Setup() {
                     onClick={confirmTotpDeviceName}
                     disabled={!totpEnabled || totpLoading || isTotpDeviceLocked}
                   >
-                    {isTotpDeviceLocked ? '设备标识已锁定' : '确认设备标识'}
+                    {isTotpDeviceLocked
+                      ? t(language, 'setup.totp.locked')
+                      : t(language, 'setup.totp.confirm')}
                   </Button>
                   <Button
                     size="sm"
@@ -470,7 +518,7 @@ export default function Setup() {
                     onClick={() => void generateTotpBindingQr()}
                     disabled={!totpEnabled || totpLoading || !isTotpDeviceConfirmed}
                   >
-                    扫码绑定
+                    {t(language, 'setup.totp.bind')}
                   </Button>
                   <Button
                     variant="secondary"
@@ -478,37 +526,51 @@ export default function Setup() {
                     onClick={() => setTotpVisible((v) => !v)}
                     disabled={!totpEnabled || !totpSecret}
                   >
-                    {totpVisible ? '隐藏密钥' : '显示密钥'}
+                    {totpVisible
+                      ? t(language, 'setup.totp.hideSecret')
+                      : t(language, 'setup.totp.showSecret')}
                   </Button>
                 </div>
 
-                {totpLoading && <p className="text-xs text-neutral-500">正在生成密钥...</p>}
+                {totpLoading && (
+                  <p className="text-xs text-neutral-500">{t(language, 'setup.totp.loading')}</p>
+                )}
                 {totpError && <p className="text-xs text-red-600">{totpError}</p>}
 
                 {isTotpDeviceConfirmed && (
                   <p className="text-xs text-neutral-500">
-                    当前设备名称：LockIt - {totpDeviceName}
+                    {t(language, 'setup.totp.currentName', { name: totpDeviceName })}
                   </p>
                 )}
 
                 {totpEnabled && (
                   <div className="p-3 bg-neutral-50 border border-neutral-200">
-                    <p className="text-xs text-neutral-500 mb-1">TOTP 密钥</p>
+                    <p className="text-xs text-neutral-500 mb-1">
+                      {t(language, 'setup.totp.secret')}
+                    </p>
                     <p className="text-sm font-mono break-all">
                       {totpSecret
                         ? totpVisible
                           ? totpSecret
                           : '••••••••••••••••••••••••••••••••'
-                        : '尚未生成'}
+                        : t(language, 'setup.totp.notGenerated')}
                     </p>
-                    <p className="text-xs text-neutral-500 mt-2">可在认证器应用中手动添加该密钥</p>
+                    <p className="text-xs text-neutral-500 mt-2">
+                      {t(language, 'setup.totp.manual')}
+                    </p>
                   </div>
                 )}
 
                 {totpQrCodeDataUrl && (
                   <div className="p-3 bg-neutral-50 border border-neutral-200 inline-block">
-                    <p className="text-xs text-neutral-500 mb-2">请使用认证器应用扫码</p>
-                    <img src={totpQrCodeDataUrl} alt="TOTP 绑定二维码" className="w-56 h-56" />
+                    <p className="text-xs text-neutral-500 mb-2">
+                      {t(language, 'setup.totp.scan')}
+                    </p>
+                    <img
+                      src={totpQrCodeDataUrl}
+                      alt={t(language, 'setup.totp.qrAlt')}
+                      className="w-56 h-56"
+                    />
                   </div>
                 )}
               </div>
@@ -516,7 +578,10 @@ export default function Setup() {
           )}
 
           {step === 3 && (
-            <Card title="锁屏时段" subtitle="至少启用一个日期并添加时段">
+            <Card
+              title={t(language, 'setup.schedule.title')}
+              subtitle={t(language, 'setup.schedule.subtitle')}
+            >
               <div className="grid grid-cols-[220px_1fr] gap-4">
                 <div className="space-y-1">
                   {dayNames.map(({ key, label, short }) => {
@@ -540,7 +605,7 @@ export default function Setup() {
                         <span
                           className={`text-xs ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}
                         >
-                          {enabled ? count : '关'}
+                          {enabled ? count : t(language, 'setup.schedule.off')}
                         </span>
                       </button>
                     )
@@ -557,12 +622,14 @@ export default function Setup() {
                           updateDaySchedule(selectedDay, { enabled: e.target.checked })
                         }
                       />
-                      启用 {dayNames.find((d) => d.key === selectedDay)?.label}
+                      {t(language, 'setup.schedule.enableDay', {
+                        day: dayNames.find((d) => d.key === selectedDay)?.label || ''
+                      })}
                     </label>
                     {schedule[selectedDay].enabled && (
                       <Button size="sm" onClick={() => addSlot(selectedDay)}>
                         <Calendar className="w-4 h-4 mr-1" />
-                        添加时段
+                        {t(language, 'setup.schedule.addSlot')}
                       </Button>
                     )}
                   </div>
@@ -570,7 +637,9 @@ export default function Setup() {
                   {schedule[selectedDay].enabled ? (
                     <div className="space-y-2">
                       {schedule[selectedDay].slots.length === 0 ? (
-                        <p className="text-xs text-neutral-500">暂无时段，请添加至少一个时段</p>
+                        <p className="text-xs text-neutral-500">
+                          {t(language, 'setup.schedule.none')}
+                        </p>
                       ) : (
                         schedule[selectedDay].slots.map((slot, index) => (
                           <div key={`${selectedDay}-${index}`} className="flex items-center gap-2">
@@ -596,14 +665,16 @@ export default function Setup() {
                               size="sm"
                               onClick={() => deleteSlot(selectedDay, index)}
                             >
-                              删除
+                              {t(language, 'setup.schedule.delete')}
                             </Button>
                           </div>
                         ))
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-neutral-500">当前日期未启用锁屏</p>
+                    <p className="text-xs text-neutral-500">
+                      {t(language, 'setup.schedule.dayDisabled')}
+                    </p>
                   )}
                 </div>
               </div>
@@ -611,7 +682,10 @@ export default function Setup() {
           )}
 
           {step === 4 && (
-            <Card title="自动启动" subtitle="设置系统登录后是否自动运行 Lock It">
+            <Card
+              title={t(language, 'setup.startup.title')}
+              subtitle={t(language, 'setup.startup.subtitle')}
+            >
               <div className="space-y-4 text-sm text-neutral-700">
                 <label className="flex items-center gap-2">
                   <input
@@ -620,11 +694,11 @@ export default function Setup() {
                     onChange={(e) => setAutoLaunch(e.target.checked)}
                     disabled={!autoLaunchSupported}
                   />
-                  开机（登录系统后）自动启动
+                  {t(language, 'setup.startup.enable')}
                 </label>
                 {!autoLaunchSupported && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2">
-                    当前平台（{platform || 'unknown'}）暂不支持自动启动配置，将按关闭处理。
+                    {t(language, 'setup.startup.unsupported', { platform: platform || 'unknown' })}
                   </p>
                 )}
               </div>
@@ -632,18 +706,25 @@ export default function Setup() {
           )}
 
           {step === 5 && (
-            <Card title="界面样式" subtitle="与设置页字段保持一致，可在设置页继续精细调整">
+            <Card
+              title={t(language, 'setup.style.title')}
+              subtitle={t(language, 'setup.style.subtitle')}
+            >
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">主标题</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.center')}
+                    </label>
                     <Input
                       value={style.centerText}
                       onChange={(v) => setStyle((s) => ({ ...s, centerText: v }))}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">副标题</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.sub')}
+                    </label>
                     <Input
                       value={style.subText}
                       onChange={(v) => setStyle((s) => ({ ...s, subText: v }))}
@@ -653,14 +734,18 @@ export default function Setup() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">左下角文字</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.left')}
+                    </label>
                     <Input
                       value={style.bottomLeftText}
                       onChange={(v) => setStyle((s) => ({ ...s, bottomLeftText: v }))}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">右下角文字</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.right')}
+                    </label>
                     <Input
                       value={style.bottomRightText}
                       onChange={(v) => setStyle((s) => ({ ...s, bottomRightText: v }))}
@@ -670,14 +755,18 @@ export default function Setup() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">背景色</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.bg')}
+                    </label>
                     <Input
                       value={style.backgroundColor}
                       onChange={(v) => setStyle((s) => ({ ...s, backgroundColor: v }))}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1.5">文字色</label>
+                    <label className="block text-xs text-neutral-600 mb-1.5">
+                      {t(language, 'setup.style.text')}
+                    </label>
                     <Input
                       value={style.textColor}
                       onChange={(v) => setStyle((s) => ({ ...s, textColor: v }))}
@@ -705,18 +794,31 @@ export default function Setup() {
           )}
 
           {step === 6 && (
-            <Card title="配置完成" subtitle="点击下方按钮保存并进入设置页面">
+            <Card
+              title={t(language, 'setup.done.title')}
+              subtitle={t(language, 'setup.done.subtitle')}
+            >
               <div className="text-sm text-neutral-700 space-y-2">
-                <p>固定密码：已配置</p>
+                <p>{t(language, 'setup.done.fixed')}</p>
                 <p>
-                  TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}
+                  {t(language, 'setup.done.totp', {
+                    status:
+                      totpEnabled && totpSecret
+                        ? t(language, 'setup.done.totpOn')
+                        : t(language, 'setup.done.totpOff')
+                  })}
                 </p>
-                <p>锁屏时段：已配置</p>
+                <p>{t(language, 'setup.done.schedule')}</p>
                 <p>
-                  自动启动：
-                  {autoLaunchSupported ? (autoLaunch ? '已启用' : '未启用') : '当前平台不支持'}
+                  {t(language, 'setup.done.startup', {
+                    status: autoLaunchSupported
+                      ? autoLaunch
+                        ? t(language, 'setup.done.startupOn')
+                        : t(language, 'setup.done.startupOff')
+                      : t(language, 'setup.done.startupUnsupported')
+                  })}
                 </p>
-                <p>界面样式：已配置</p>
+                <p>{t(language, 'setup.done.style')}</p>
               </div>
             </Card>
           )}
@@ -729,12 +831,12 @@ export default function Setup() {
             disabled={step === 0 || isSaving}
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
-            上一步
+            {t(language, 'setup.prev')}
           </Button>
 
           {step < steps.length - 1 ? (
             <Button onClick={() => setStep((s) => s + 1)} disabled={!canProceed() || isSaving}>
-              下一步
+              {t(language, 'setup.next')}
               <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           ) : (
@@ -742,12 +844,12 @@ export default function Setup() {
               {isSaving ? (
                 <>
                   <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  保存中
+                  {t(language, 'common.saving')}
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4 mr-1" />
-                  完成并进入设置
+                  {t(language, 'setup.finish')}
                 </>
               )}
             </Button>
@@ -759,7 +861,7 @@ export default function Setup() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
           <div className="bg-white border border-neutral-200 px-6 py-4 text-sm text-neutral-700 flex items-center gap-2">
             <KeyRound className="w-4 h-4" />
-            正在保存配置并初始化...
+            {t(language, 'setup.savingInit')}
           </div>
         </div>
       )}

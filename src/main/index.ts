@@ -86,10 +86,13 @@ interface AppConfig {
   password: PasswordConfig
   schedule: WeeklySchedule
   style: StyleConfig
+  language: AppLanguage
   selectedCamera?: string
   startup?: StartupConfig
   update?: UpdateConfig
 }
+
+type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP' | 'ko-KR'
 
 interface StartupConfig {
   autoLaunch: boolean
@@ -193,7 +196,7 @@ const defaultStyle = (): StyleConfig => ({
   themeMode: 'dark',
   centerText: '此计算机因违规外联已被阻断',
   subText: '请等待安全部门与你联系',
-  bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
+  bottomLeftText: '夏莱保密委员会办公室\n联邦学生会意识形态工作领导小组办公室',
   bottomRightText: '',
   backgroundColor: '#0066cc',
   textColor: '#ffffff',
@@ -258,6 +261,85 @@ function normalizeUpdateConfig(update?: Partial<UpdateConfig>): UpdateConfig {
         ? update.autoInstallOnQuit
         : defaults.autoInstallOnQuit
   }
+}
+
+function normalizeLanguage(language?: string): AppLanguage {
+  if (!language) return 'zh-CN'
+  const normalized = String(language).trim().replace(/_/g, '-').toLowerCase()
+  if (normalized === 'en' || normalized === 'en-us') return 'en-US'
+  if (normalized === 'ja' || normalized === 'ja-jp') return 'ja-JP'
+  if (normalized === 'ko' || normalized === 'ko-kr') return 'ko-KR'
+  if (normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-hans') return 'zh-CN'
+  return 'zh-CN'
+}
+
+type TrayI18n = {
+  tooltip: string
+  showSettings: string
+  locked: string
+  unlocked: string
+  autoEnabled: string
+  autoPaused: string
+  lockNow: string
+  resumeAutoLock: string
+  unlockNeedPassword: string
+  quit: string
+}
+
+const trayI18nMap: Record<AppLanguage, TrayI18n> = {
+  'zh-CN': {
+    tooltip: 'Lock It - 自动锁屏',
+    showSettings: '显示设置',
+    locked: '🔒 已锁定',
+    unlocked: '🔓 未锁定',
+    autoEnabled: '✓ 自动锁屏已启用',
+    autoPaused: '✗ 自动锁屏已暂停',
+    lockNow: '立即锁定',
+    resumeAutoLock: '恢复自动锁屏',
+    unlockNeedPassword: '解锁（需密码）',
+    quit: '退出'
+  },
+  'en-US': {
+    tooltip: 'Lock It - Auto Lock',
+    showSettings: 'Open Settings',
+    locked: '🔒 Locked',
+    unlocked: '🔓 Unlocked',
+    autoEnabled: '✓ Auto lock enabled',
+    autoPaused: '✗ Auto lock paused',
+    lockNow: 'Lock Now',
+    resumeAutoLock: 'Resume Auto Lock',
+    unlockNeedPassword: 'Unlock (Password Required)',
+    quit: 'Quit'
+  },
+  'ja-JP': {
+    tooltip: 'Lock It - 自動ロック',
+    showSettings: '設定を開く',
+    locked: '🔒 ロック中',
+    unlocked: '🔓 ロック解除',
+    autoEnabled: '✓ 自動ロック有効',
+    autoPaused: '✗ 自動ロック一時停止',
+    lockNow: '今すぐロック',
+    resumeAutoLock: '自動ロックを再開',
+    unlockNeedPassword: '解除（パスワード必要）',
+    quit: '終了'
+  },
+  'ko-KR': {
+    tooltip: 'Lock It - 자동 잠금',
+    showSettings: '설정 열기',
+    locked: '🔒 잠금됨',
+    unlocked: '🔓 잠금 해제됨',
+    autoEnabled: '✓ 자동 잠금 활성화',
+    autoPaused: '✗ 자동 잠금 일시중지',
+    lockNow: '지금 잠그기',
+    resumeAutoLock: '자동 잠금 재개',
+    unlockNeedPassword: '잠금 해제(비밀번호 필요)',
+    quit: '종료'
+  }
+}
+
+function getTrayI18n(): TrayI18n {
+  const language = normalizeLanguage(store?.get('language') as string | undefined)
+  return trayI18nMap[language]
 }
 
 function isAutoLaunchSupported(): boolean {
@@ -392,6 +474,7 @@ async function initModules(): Promise<void> {
       password: { type: 'fixed', fixedPassword: '123456' },
       schedule: defaultSchedule(),
       style: defaultStyle(),
+      language: 'zh-CN',
       startup: defaultStartup(),
       update: defaultUpdate()
     }
@@ -748,17 +831,19 @@ function createTray(): void {
 
   const iconPath = join(__dirname, '../../resources/icon.png')
   tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }))
-  tray.setToolTip('Lock It - 自动锁屏')
+  tray.setToolTip(getTrayI18n().tooltip)
 
   updateTrayMenu()
 }
 
 function updateTrayMenu(): void {
   if (!tray) return
+  const trayI18n = getTrayI18n()
+  tray.setToolTip(trayI18n.tooltip)
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示设置',
+      label: trayI18n.showSettings,
       click: () => {
         if (!mainWindow || mainWindow.isDestroyed()) {
           createMainWindow()
@@ -771,11 +856,11 @@ function updateTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: isLocked ? '🔒 已锁定' : '🔓 未锁定',
+      label: isLocked ? trayI18n.locked : trayI18n.unlocked,
       enabled: false
     },
     {
-      label: autoLockEnabled ? '✓ 自动锁屏已启用' : '✗ 自动锁屏已暂停',
+      label: autoLockEnabled ? trayI18n.autoEnabled : trayI18n.autoPaused,
       enabled: false
     },
     { type: 'separator' },
@@ -783,7 +868,7 @@ function updateTrayMenu(): void {
       ? []
       : [
           {
-            label: '立即锁定',
+            label: trayI18n.lockNow,
             click: () => {
               isLocked = true
               createLockWindow()
@@ -794,7 +879,7 @@ function updateTrayMenu(): void {
     ...(!isLocked && !autoLockEnabled
       ? [
           {
-            label: '恢复自动锁屏',
+            label: trayI18n.resumeAutoLock,
             click: () => {
               autoLockEnabled = true
               updateTrayMenu()
@@ -806,7 +891,7 @@ function updateTrayMenu(): void {
     ...(isLocked
       ? [
           {
-            label: '解锁（需密码）',
+            label: trayI18n.unlockNeedPassword,
             click: () => {
               //  bring lock window to front
               if (lockWindow && !lockWindow.isDestroyed()) {
@@ -819,7 +904,7 @@ function updateTrayMenu(): void {
       : []),
     { type: 'separator' },
     {
-      label: '退出',
+      label: trayI18n.quit,
       click: () => {
         isQuitting = true
         app.quit()
@@ -1010,15 +1095,18 @@ function setupIpcHandlers(): void {
   ipcMain.handle('get-config', () => {
     const style = normalizeStyle(store.get('style') as Partial<StyleConfig>)
     const password = normalizePasswordConfig(store.get('password') as PasswordConfig)
+    const language = normalizeLanguage(store.get('language') as string | undefined)
     const startup = normalizeStartupConfig(store.get('startup') as Partial<StartupConfig>)
     const update = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
     store.set('password', password)
+    store.set('language', language)
     store.set('startup', startup)
     store.set('update', update)
     return {
       password,
       schedule: store.get('schedule'),
       style: style,
+      language,
       selectedCamera: store.get('selectedCamera'),
       startup,
       update
@@ -1048,6 +1136,10 @@ function setupIpcHandlers(): void {
         }
       })
       store.set('style', mergedStyle)
+    }
+    if (config.language !== undefined) {
+      store.set('language', normalizeLanguage(config.language))
+      updateTrayMenu()
     }
     if (config.selectedCamera !== undefined) store.set('selectedCamera', config.selectedCamera)
     if (config.startup) {

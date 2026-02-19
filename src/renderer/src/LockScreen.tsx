@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Delete, AlertTriangle, Camera } from 'lucide-react'
+import { AppLanguage, normalizeLanguage, t } from './i18n'
 
 // ============================================================================
 // 类型定义
@@ -54,12 +55,14 @@ function Keypad({
   onKeyPress,
   onDelete,
   onClear,
-  textColor
+  textColor,
+  clearText
 }: {
   onKeyPress: (key: string) => void
   onDelete: () => void
   onClear: () => void
   textColor: string
+  clearText: string
 }) {
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫']
 
@@ -78,7 +81,7 @@ function Keypad({
               className={`h-14 ${buttonBg} ${buttonHoverBg} flex items-center justify-center text-sm font-medium transition-colors`}
               style={{ color: textColor }}
             >
-              清空
+              {clearText}
             </button>
           )
         }
@@ -115,11 +118,13 @@ function Keypad({
 function CameraCapture({
   onCapture,
   enabled,
-  selectedDeviceId
+  selectedDeviceId,
+  language
 }: {
   onCapture: (data: string) => void
   enabled: boolean
   selectedDeviceId?: string
+  language: AppLanguage
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -162,7 +167,7 @@ function CameraCapture({
               return
             }
           } catch {
-            setError('指定摄像头不可用')
+            setError(t(language, 'lockscreen.camera.fallback'))
           }
         }
 
@@ -179,7 +184,7 @@ function CameraCapture({
       } catch (err) {
         setHasCamera(false)
         setIsUsingFallback(false)
-        setError('摄像头不可用')
+        setError(t(language, 'lockscreen.camera.offline'))
       }
     }
 
@@ -191,7 +196,7 @@ function CameraCapture({
         streamRef.current = null
       }
     }
-  }, [enabled, selectedDeviceId])
+  }, [enabled, selectedDeviceId, language])
 
   const capture = () => {
     if (!videoRef.current || !canvasRef.current || !hasCamera) return null
@@ -225,7 +230,11 @@ function CameraCapture({
           ${hasCamera ? (isUsingFallback ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400') : 'bg-red-500/20 text-red-400'}`}
       >
         <Camera className="w-3 h-3" />
-        {hasCamera ? (isUsingFallback ? '备用摄像头' : '监控中') : '监控暂时离线'}
+        {hasCamera
+          ? isUsingFallback
+            ? t(language, 'lockscreen.camera.fallback')
+            : t(language, 'lockscreen.camera.monitoring')
+          : t(language, 'lockscreen.camera.offline')}
       </div>
     </div>
   )
@@ -235,6 +244,7 @@ function CameraCapture({
 // 主组件
 // ============================================================================
 export default function LockScreen() {
+  const [language, setLanguage] = useState<AppLanguage>('zh-CN')
   const [style, setStyle] = useState<StyleConfig>({
     centerText: '此计算机因违规外联已被阻断',
     subText: '请等待安全部门与你联系',
@@ -272,6 +282,11 @@ export default function LockScreen() {
 
   // 加载样式
   useEffect(() => {
+    window.api
+      .getConfig()
+      .then((config) => setLanguage(normalizeLanguage(config.language)))
+      .catch(() => setLanguage('zh-CN'))
+
     window.api
       .getStyle()
       .then((config) => {
@@ -431,11 +446,11 @@ export default function LockScreen() {
         setUnlocked(true)
         setTimeout(() => window.api.unlock(), 800)
       } else {
-        setError('密码错误')
+        setError(t(language, 'lockscreen.error.wrongPassword'))
         setPin('')
       }
     } catch (e) {
-      setError('验证失败')
+      setError(t(language, 'lockscreen.error.verifyFailed'))
       setPin('')
       await captureAndRecord(false, newCount)
     } finally {
@@ -540,6 +555,7 @@ export default function LockScreen() {
             onCapture={() => {}}
             enabled={cameraEnabled && cameraConfigLoaded}
             selectedDeviceId={selectedCamera}
+            language={language}
           />
           {renderTime()}
 
@@ -608,7 +624,7 @@ export default function LockScreen() {
                   {style.closeScreenPrompt}
                 </h3>
                 <p className="text-sm opacity-60 mb-6" style={{ color: style.textColor }}>
-                  点击"已关闭"继续操作，或点击背景取消
+                  {t(language, 'lockscreen.closePrompt.help')}
                 </p>
                 <div className="flex gap-3 justify-center">
                   <button
@@ -616,14 +632,14 @@ export default function LockScreen() {
                     className="px-6 py-2 text-sm opacity-60 hover:opacity-100 transition-opacity"
                     style={{ color: style.textColor, border: `1px solid ${style.textColor}30` }}
                   >
-                    取消
+                    {t(language, 'lockscreen.common.cancel')}
                   </button>
                   <button
                     onClick={handleConfirmClose}
                     className="px-6 py-2 text-sm font-medium transition-colors"
                     style={{ backgroundColor: style.textColor, color: style.backgroundColor }}
                   >
-                    已关闭
+                    {t(language, 'lockscreen.closePrompt.closed')}
                   </button>
                 </div>
               </div>
@@ -643,11 +659,11 @@ export default function LockScreen() {
                   style={{ borderColor: `${style.textColor}20` }}
                 >
                   <span className="text-sm font-medium" style={{ color: style.textColor }}>
-                    输入密码
+                    {t(language, 'lockscreen.unlock.inputPassword')}
                   </span>
                   {attemptCount > 0 && (
                     <span className="text-xs opacity-50" style={{ color: style.textColor }}>
-                      第 {attemptCount} 次
+                      {t(language, 'lockscreen.unlock.attempt', { count: attemptCount })}
                     </span>
                   )}
                   <button
@@ -704,7 +720,7 @@ export default function LockScreen() {
                         style={{ borderColor: style.textColor, borderTopColor: 'transparent' }}
                       />
                       <p className="text-xs mt-2 opacity-60" style={{ color: style.textColor }}>
-                        验证中...
+                        {t(language, 'lockscreen.unlock.verifying')}
                       </p>
                     </div>
                   )}
@@ -715,6 +731,7 @@ export default function LockScreen() {
                     onDelete={handleDelete}
                     onClear={handleClear}
                     textColor={style.textColor}
+                    clearText={t(language, 'lockscreen.keypad.clear')}
                   />
                 </div>
               </div>
@@ -740,10 +757,10 @@ export default function LockScreen() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-medium mb-1" style={{ color: style.textColor }}>
-                  解锁成功
+                  {t(language, 'lockscreen.unlock.success')}
                 </h3>
                 <p className="text-sm opacity-60" style={{ color: style.textColor }}>
-                  自动锁屏已暂停
+                  {t(language, 'lockscreen.unlock.paused')}
                 </p>
               </div>
             </div>

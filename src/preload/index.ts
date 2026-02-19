@@ -84,6 +84,8 @@ export interface PasswordConfig {
   totpDeviceName?: string
 }
 
+export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP' | 'ko-KR'
+
 export interface StartupConfig {
   autoLaunch: boolean
 }
@@ -124,6 +126,7 @@ export interface API {
     password?: PasswordConfig
     schedule?: WeeklySchedule
     style?: Partial<StyleConfig>
+    language?: AppLanguage
     selectedCamera?: string
     startup?: StartupConfig
     update?: UpdateConfig
@@ -134,6 +137,7 @@ export interface API {
     password: PasswordConfig
     schedule: WeeklySchedule
     style: StyleConfig
+    language: AppLanguage
     selectedCamera?: string
     startup: StartupConfig
     update: UpdateConfig
