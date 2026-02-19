@@ -86,18 +86,18 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-  publish-preview:
+  build-preview:
     needs: prepare-preview
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            target: win
+            targetArgs: --win nsis
           - os: macos-latest
-            target: mac
+            targetArgs: --mac zip
           - os: ubuntu-latest
-            target: linux
+            targetArgs: --linux AppImage deb
 
     runs-on: ${{ matrix.os }}
 
@@ -131,39 +131,49 @@ jobs:
           PREVIEW_VERSION: ${{ needs.prepare-preview.outputs.version }}
 
       - name: Build and publish preview
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          yarn build
-          yarn electron-builder --${{ matrix.target }} --publish always --config.publish.releaseType=prerelease
-
-      - name: Summary
         shell: bash
         run: |
-          echo "Preview version: ${{ needs.prepare-preview.outputs.version }}"
+          yarn build
+          yarn electron-builder ${{ matrix.targetArgs }} --publish never
 
-  update-preview-notes:
-    needs: [prepare-preview, publish-preview]
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/*.yml
+            dist/*.yaml
+
+  publish-preview:
+    needs: [prepare-preview, build-preview]
     runs-on: ubuntu-latest
     steps:
-      - name: Update release notes
-        uses: actions/github-script@v7
-        env:
-          RELEASE_TAG: ${{ needs.prepare-preview.outputs.tag }}
-          RELEASE_NOTES: ${{ needs.prepare-preview.outputs.release_notes }}
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo
-            const tag = process.env.RELEASE_TAG
-            const body = process.env.RELEASE_NOTES || ''
+          path: release-assets
+          merge-multiple: true
 
-            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
-            await github.rest.repos.updateRelease({
-              owner,
-              repo,
-              release_id: release.data.id,
-              tag_name: tag,
-              prerelease: true,
-              body
-            })
+      - name: Publish preview release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare-preview.outputs.tag }}
+          name: Preview ${{ needs.prepare-preview.outputs.version }}
+          prerelease: true
+          body: ${{ needs.prepare-preview.outputs.release_notes }}
+          files: |
+            release-assets/**/*.exe
+            release-assets/**/*.zip
+            release-assets/**/*.AppImage
+            release-assets/**/*.deb
+            release-assets/**/*.blockmap
+            release-assets/**/*.yml
+            release-assets/**/*.yaml

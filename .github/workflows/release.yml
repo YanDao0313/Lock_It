@@ -110,11 +110,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target: win
+            targetArgs: --win nsis
           - os: macos-latest
-            target: mac
+            targetArgs: --mac zip
           - os: ubuntu-latest
-            target: linux
+            targetArgs: --linux AppImage deb
 
     runs-on: ${{ matrix.os }}
 
@@ -155,34 +155,49 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build and publish official release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           yarn build
-          yarn electron-builder --${{ matrix.target }} --publish always --config.publish.releaseType=release
+          yarn electron-builder ${{ matrix.targetArgs }} --publish never
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/*.yml
+            dist/*.yaml
 
   update-release-notes:
     needs: [prepare-release, publish-release]
     runs-on: ubuntu-latest
     steps:
-      - name: Update release notes
-        uses: actions/github-script@v7
-        env:
-          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
-          RELEASE_NOTES: ${{ needs.prepare-release.outputs.release_notes }}
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo
-            const tag = process.env.RELEASE_TAG
-            const body = process.env.RELEASE_NOTES || ''
+          path: release-assets
+          merge-multiple: true
 
-            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
-            await github.rest.repos.updateRelease({
-              owner,
-              repo,
-              release_id: release.data.id,
-              tag_name: tag,
-              prerelease: false,
-              body
-            })
+      - name: Publish official release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          name: Release ${{ needs.prepare-release.outputs.version }}
+          prerelease: false
+          body: ${{ needs.prepare-release.outputs.release_notes }}
+          files: |
+            release-assets/**/*.exe
+            release-assets/**/*.zip
+            release-assets/**/*.AppImage
+            release-assets/**/*.deb
+            release-assets/**/*.blockmap
+            release-assets/**/*.yml
+            release-assets/**/*.yaml
