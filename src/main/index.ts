@@ -99,6 +99,7 @@ interface StartupConfig {
 }
 
 interface UpdateConfig {
+  channel: 'stable' | 'preview'
   checkOnStartup: boolean
   autoDownload: boolean
   autoInstallOnQuit: boolean
@@ -215,6 +216,7 @@ const defaultStartup = (): StartupConfig => ({
 })
 
 const defaultUpdate = (): UpdateConfig => ({
+  channel: 'stable',
   checkOnStartup: true,
   autoDownload: true,
   autoInstallOnQuit: true
@@ -251,7 +253,9 @@ function normalizeStartupConfig(startup?: Partial<StartupConfig>): StartupConfig
 
 function normalizeUpdateConfig(update?: Partial<UpdateConfig>): UpdateConfig {
   const defaults = defaultUpdate()
+  const channel = update?.channel === 'preview' ? 'preview' : defaults.channel
   return {
+    channel,
     checkOnStartup:
       typeof update?.checkOnStartup === 'boolean' ? update.checkOnStartup : defaults.checkOnStartup,
     autoDownload:
@@ -368,6 +372,7 @@ function syncStartupSettingFromConfig(): void {
 function applyUpdaterConfigFromStore(): UpdateConfig {
   const update = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
   store.set('update', update)
+  autoUpdater.allowPrerelease = update.channel === 'preview'
   autoUpdater.autoDownload = update.autoDownload
   autoUpdater.autoInstallOnAppQuit = update.autoInstallOnQuit
   return update

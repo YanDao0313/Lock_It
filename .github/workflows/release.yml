@@ -1,0 +1,185 @@
+name: Official Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '正式版本号（例如 1.2.3）'
+        required: true
+        type: string
+      extra_notes:
+        description: '附加说明（可留空，将追加到自动生成的提交记录后）'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      release_notes: ${{ steps.meta.outputs.release_notes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate and prepare release metadata
+        id: meta
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          EXTRA_NOTES: ${{ github.event.inputs.extra_notes }}
+        run: |
+          VERSION="${RELEASE_VERSION}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $VERSION (expected x.y.z)"
+            exit 1
+          fi
+
+          TAG="v${VERSION}"
+          PREV_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v "^${TAG}$" | head -n1 || true)
+          if [ -n "$PREV_TAG" ]; then
+            RAW_COMMITS=$(git log --pretty=format:'%s|%h' "${PREV_TAG}..HEAD")
+          else
+            RAW_COMMITS=$(git log --pretty=format:'%s|%h' -n 30)
+          fi
+
+          NOTES_FILE=$(mktemp)
+          if [ -z "$RAW_COMMITS" ]; then
+            echo '- No commit changes detected in this range.' >> "$NOTES_FILE"
+          else
+            append_group() {
+              local title="$1"
+              local pattern="$2"
+              local lines
+              lines=$(printf '%s\n' "$RAW_COMMITS" | grep -Ei "$pattern" || true)
+              if [ -n "$lines" ]; then
+                echo "### ${title}" >> "$NOTES_FILE"
+                printf '%s\n' "$lines" | sed -E 's/^(.+)\|([0-9a-f]+)$/- \1 (\2)/' >> "$NOTES_FILE"
+                echo >> "$NOTES_FILE"
+              fi
+            }
+
+            COMMON_PREFIX='(\(.+\))?:'
+            append_group '✨ Features' "^(feat|feature)${COMMON_PREFIX}"
+            append_group '🐛 Fixes' "^(fix|hotfix)${COMMON_PREFIX}"
+            append_group '⚡ Refactors & Performance' "^(refactor|perf)${COMMON_PREFIX}"
+            append_group '📝 Docs' "^(docs|doc)${COMMON_PREFIX}"
+            append_group '🔧 Chore / CI / Test' "^(chore|build|ci|test|style|revert)${COMMON_PREFIX}"
+
+            OTHER_LINES=$(printf '%s\n' "$RAW_COMMITS" | grep -Eiv "^(feat|feature|fix|hotfix|refactor|perf|docs|doc|chore|build|ci|test|style|revert)${COMMON_PREFIX}" || true)
+            if [ -n "$OTHER_LINES" ]; then
+              echo '### 📦 Others' >> "$NOTES_FILE"
+              printf '%s\n' "$OTHER_LINES" | sed -E 's/^(.+)\|([0-9a-f]+)$/- \1 (\2)/' >> "$NOTES_FILE"
+              echo >> "$NOTES_FILE"
+            fi
+          fi
+
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo 'release_notes<<EOF'
+            echo "## Release ${VERSION}"
+            echo
+            echo "- Channel: stable"
+            echo "- Commit: ${GITHUB_SHA}"
+            if [ -n "$PREV_TAG" ]; then
+              echo "- Compare: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${GITHUB_SHA}"
+            else
+              echo "- Compare: https://github.com/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}"
+            fi
+            echo
+            cat "$NOTES_FILE"
+            if [ -n "$EXTRA_NOTES" ]; then
+              echo
+              echo "### Maintainer Notes"
+              echo "${EXTRA_NOTES}"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+  publish-release:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+          - os: ubuntu-latest
+            target: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate and set release version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          VERSION="${RELEASE_VERSION}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $VERSION (expected x.y.z)"
+            exit 1
+          fi
+
+          node - <<'NODE'
+          const fs = require('fs')
+          const path = 'package.json'
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const version = process.env.RELEASE_VERSION
+          pkg.version = version
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`)
+          NODE
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and publish official release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run build
+          npx electron-builder --${{ matrix.target }} --publish always -c.publish.releaseType=release
+
+  update-release-notes:
+    needs: [prepare-release, publish-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update release notes
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+          RELEASE_NOTES: ${{ needs.prepare-release.outputs.release_notes }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo
+            const tag = process.env.RELEASE_TAG
+            const body = process.env.RELEASE_NOTES || ''
+
+            const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.data.id,
+              tag_name: tag,
+              prerelease: false,
+              body
+            })

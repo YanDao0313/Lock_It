@@ -80,18 +80,43 @@ yarn build:unpack
 - 本番環境では起動後に自動更新を確認してダウンロード
 - ダウンロード完了後、アプリ終了時に自動インストール
 
-### 新バージョンの公開
+### アプリ内の更新チャンネル
 
-1. `package.json` の `version` を更新
-2. GitHub Token を設定（repo release 権限が必要）
-3. パッケージ化と公開を実行
+`設定` -> `About` -> `Software Update` で以下を選択できます。
 
-PowerShell 例:
+- `Stable`: 正式 Release のみ受信
+- `Preview / Prerelease`: `main` から自動公開されるプレリリースを受信
 
-```powershell
-$env:GH_TOKEN = "<your_github_token>"
-yarn build:win
-```
+> チャンネル変更後は保存してから「今すぐ確認」を実行してください。
+
+### GitHub Actions 自動公開
+
+次の2つのワークフローを設定済みです。
+
+- `.github/workflows/preview-release.yml`
+  - トリガー: `main` への push ごと
+  - 動作: プレビュー向け `Prerelease` を自動ビルド/公開
+  - バージョン形式: `x.y.z-preview.<short_sha>`（例: `1.2.3-preview.a1b2c3d4`）
+  - Release Notes: プレビュー区間のコミット履歴から自動生成
+
+- `.github/workflows/release.yml`
+  - トリガー: 手動 `workflow_dispatch`
+  - 動作: 入力したバージョンで正式 `Release` を公開
+  - 任意入力 `extra_notes` に対応（空でも可）
+  - Release Notes: コミット履歴 + `extra_notes` を統合
+
+### 正式リリース手順（推奨）
+
+1. GitHub の `Actions` -> `Official Release` を開く
+2. `Run workflow` をクリックし、バージョン（例: `1.2.3`）を入力
+3. 必要なら `extra_notes` を入力（空でも可）
+4. 全プラットフォームのジョブ完了後、Release に自動反映
+
+### 権限とトークン
+
+- ワークフローは `secrets.GITHUB_TOKEN` を使用
+- リポジトリの Actions 権限で `Read and write permissions` が必要
+- 組織リポジトリでは Release 作成/更新が許可されているか確認
 
 > `electron-builder` は設定に従ってインストーラーと更新メタデータを GitHub Releases に公開します。
 

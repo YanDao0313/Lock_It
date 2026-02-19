@@ -79,19 +79,45 @@ yarn build:unpack
   - `repo: Lock_It`
 - 主进程在生产环境启动后会自动检查更新并下载
 - 下载完成后在应用退出时自动安装
+- 支持双通道：`stable`（正式）/ `preview`（预发布）
 
-### 发布更新版本
+### 应用内更新通道
 
-1. 修改 `package.json` 中的 `version`
-2. 设置 GitHub Token（需要有 repo 发布权限）
-3. 执行打包发布
+在设置页 `关于` → `软件更新` 中可选择：
 
-PowerShell 示例：
+- `正式版（Stable）`：只接收正式 Release
+- `预览版（Preview / Prerelease）`：接收 main 分支自动发布的预发布版本
 
-```powershell
-$env:GH_TOKEN = "<your_github_token>"
-yarn build:win
-```
+> 通道切换后请点击“保存配置”，然后手动“立即检查更新”。
+
+### GitHub Actions 自动发布
+
+仓库已提供两条工作流：
+
+- `.github/workflows/preview-release.yml`
+  - 触发：每次 `push` 到 `main`
+  - 行为：自动构建并发布 `Prerelease`（预览通道）
+  - 版本格式：`x.y.z-preview.<short_sha>`（例如 `1.2.3-preview.a1b2c3d4`）
+  - Release Notes：自动写入提交记录（基于最近预览发布区间）
+
+- `.github/workflows/release.yml`
+  - 触发：手动 `workflow_dispatch`
+  - 行为：按输入版本号发布正式 `Release`
+  - 支持输入可选 `extra_notes`（可留空）
+  - Release Notes：自动写入提交记录，并拼接 `extra_notes`
+
+### 正式发版流程
+
+1. 在 GitHub 仓库打开 `Actions` → `Official Release`
+2. 点击 `Run workflow`，输入版本号（例如 `1.2.3`）
+3. 可选填写 `extra_notes`（留空也可）
+4. 等待多平台构建完成，产物会自动进入正式 Release
+
+### 权限与密钥说明
+
+- 工作流使用 `secrets.GITHUB_TOKEN` 自动发布
+- 需要仓库 `Actions` 具备 `Read and write permissions`
+- 若为组织仓库，请确认组织策略允许创建 Release
 
 > 说明：`electron-builder` 会根据配置将安装包和更新元数据发布到 GitHub Release。
 

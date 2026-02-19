@@ -68,6 +68,7 @@ interface StartupConfig {
 }
 
 interface UpdateConfig {
+  channel: 'stable' | 'preview'
   checkOnStartup: boolean
   autoDownload: boolean
   autoInstallOnQuit: boolean

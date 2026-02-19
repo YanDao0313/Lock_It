@@ -122,6 +122,7 @@ interface StartupConfig {
 }
 
 interface UpdateConfig {
+  channel: 'stable' | 'preview'
   checkOnStartup: boolean
   autoDownload: boolean
   autoInstallOnQuit: boolean
@@ -421,6 +422,29 @@ function getTimeFormatOptions(language: AppLanguage) {
         'en-US': 'YYYY-MM-DD HH:mm',
         'ja-JP': '年-月-日 時:分',
         'ko-KR': '년-월-일 시:분'
+      })
+    }
+  ]
+}
+
+function getUpdateChannelOptions(language: AppLanguage) {
+  return [
+    {
+      value: 'stable',
+      label: lt(language, {
+        'zh-CN': '正式版（Stable）',
+        'en-US': 'Stable',
+        'ja-JP': '安定版（Stable）',
+        'ko-KR': '안정판(Stable)'
+      })
+    },
+    {
+      value: 'preview',
+      label: lt(language, {
+        'zh-CN': '预览版（Preview / Prerelease）',
+        'en-US': 'Preview / Prerelease',
+        'ja-JP': 'プレビュー版（Prerelease）',
+        'ko-KR': '프리뷰 / 사전 릴리스'
       })
     }
   ]
@@ -2199,6 +2223,7 @@ export default function Settings() {
   const [selectedCamera, setSelectedCamera] = useState<string | undefined>(undefined)
   const [startup, setStartup] = useState<StartupConfig>({ autoLaunch: true })
   const [update, setUpdate] = useState<UpdateConfig>({
+    channel: 'stable',
     checkOnStartup: true,
     autoDownload: true,
     autoInstallOnQuit: true
@@ -2300,9 +2325,14 @@ export default function Settings() {
       const nextLanguage = normalizeLanguage(config.language)
       const nextStartup: StartupConfig = config.startup || { autoLaunch: true }
       const nextUpdate: UpdateConfig = config.update || {
+        channel: 'stable',
         checkOnStartup: true,
         autoDownload: true,
         autoInstallOnQuit: true
+      }
+
+      if (nextUpdate.channel !== 'preview') {
+        nextUpdate.channel = 'stable'
       }
 
       setPassword(nextPassword)
@@ -3622,6 +3652,39 @@ export default function Settings() {
                   })}
                 >
                   <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs tracking-wide text-neutral-500 uppercase">
+                        {lt(language, {
+                          'zh-CN': '更新通道',
+                          'en-US': 'Update Channel',
+                          'ja-JP': '更新チャンネル',
+                          'ko-KR': '업데이트 채널'
+                        })}
+                      </label>
+                      <Select
+                        value={update.channel}
+                        onChange={(value) =>
+                          setUpdate((u) => ({
+                            ...u,
+                            channel: value === 'preview' ? 'preview' : 'stable'
+                          }))
+                        }
+                        options={getUpdateChannelOptions(language)}
+                      />
+                      <p className="text-xs text-neutral-500">
+                        {lt(language, {
+                          'zh-CN':
+                            '预览版会接收 main 分支自动发布的预发布构建，稳定版仅接收正式发布。',
+                          'en-US':
+                            'Preview gets prerelease builds from main; Stable receives official releases only.',
+                          'ja-JP':
+                            'プレビューは main の自動プレリリースを受信し、安定版は正式リリースのみ受信します。',
+                          'ko-KR':
+                            '프리뷰는 main 자동 사전 릴리스를 받고, 안정판은 정식 릴리스만 받습니다.'
+                        })}
+                      </p>
+                    </div>
+
                     <label className="flex items-center gap-3 text-sm">
                       <Toggle
                         checked={update.checkOnStartup}

@@ -80,18 +80,43 @@ This project is configured with `electron-updater` + GitHub Releases:
 - In production, the main process checks and downloads updates automatically
 - Downloaded updates are installed on app quit
 
-### Release a New Version
+### Update Channels in App
 
-1. Update the `version` field in `package.json`
-2. Set GitHub Token (must have repo release permissions)
-3. Run packaging and publishing
+In `Settings` -> `About` -> `Software Update`, users can choose:
 
-PowerShell example:
+- `Stable`: receives official Releases only
+- `Preview / Prerelease`: receives prerelease builds automatically published from `main`
 
-```powershell
-$env:GH_TOKEN = "<your_github_token>"
-yarn build:win
-```
+> After switching channel, click Save Configuration, then click Check Now.
+
+### GitHub Actions Auto Publishing
+
+Two workflows are configured:
+
+- `.github/workflows/preview-release.yml`
+  - Trigger: every push to `main`
+  - Behavior: build and publish `Prerelease` for preview channel
+  - Version format: `x.y.z-preview.<short_sha>` (for example `1.2.3-preview.a1b2c3d4`)
+  - Release Notes: automatically generated from commit history in the preview range
+
+- `.github/workflows/release.yml`
+  - Trigger: manual `workflow_dispatch`
+  - Behavior: publish official `Release` with the input version
+  - Supports optional `extra_notes` input (can be empty)
+  - Release Notes: commit-based notes + optional `extra_notes`
+
+### Official Release Flow (Recommended)
+
+1. Open `Actions` -> `Official Release` in GitHub
+2. Click `Run workflow`, input version (for example `1.2.3`)
+3. Optionally fill `extra_notes` (or leave empty)
+4. Wait for all platform jobs to finish; assets are published to Release automatically
+
+### Permissions and Token
+
+- Workflow uses `secrets.GITHUB_TOKEN`
+- Repository Actions permission must allow `Read and write permissions`
+- For organization repos, ensure policy allows creating/updating Releases
 
 > `electron-builder` uploads installers and update metadata to GitHub Releases according to config.
 
