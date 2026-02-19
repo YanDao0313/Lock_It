@@ -109,10 +109,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm install
+        run: yarn install --frozen-lockfile
 
       - name: Set preview version
         shell: bash
@@ -131,8 +134,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run build
-          npx electron-builder --${{ matrix.target }} --publish always -c.publish.releaseType=prerelease
+          yarn build
+          yarn electron-builder --${{ matrix.target }} --publish always --config.publish.releaseType=prerelease
 
       - name: Summary
         shell: bash

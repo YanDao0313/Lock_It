@@ -126,7 +126,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Validate and set release version
         shell: bash
@@ -149,14 +152,14 @@ jobs:
           NODE
 
       - name: Install dependencies
-        run: npm install
+        run: yarn install --frozen-lockfile
 
       - name: Build and publish official release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run build
-          npx electron-builder --${{ matrix.target }} --publish always -c.publish.releaseType=release
+          yarn build
+          yarn electron-builder --${{ matrix.target }} --publish always --config.publish.releaseType=release
 
   update-release-notes:
     needs: [prepare-release, publish-release]
