@@ -162,10 +162,7 @@ function CameraCapture({
               return
             }
           } catch {
-            setHasCamera(false)
-            setIsUsingFallback(false)
             setError('指定摄像头不可用')
-            return
           }
         }
 
@@ -176,7 +173,7 @@ function CameraCapture({
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           setHasCamera(true)
-          setIsUsingFallback(false)
+          setIsUsingFallback(Boolean(selectedDeviceId))
           setError('')
         }
       } catch (err) {
@@ -228,7 +225,7 @@ function CameraCapture({
           ${hasCamera ? (isUsingFallback ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400') : 'bg-red-500/20 text-red-400'}`}
       >
         <Camera className="w-3 h-3" />
-        {hasCamera ? (isUsingFallback ? '备用摄像头' : '监控中') : '无监控'}
+        {hasCamera ? (isUsingFallback ? '备用摄像头' : '监控中') : '监控暂时离线'}
       </div>
     </div>
   )
@@ -394,7 +391,12 @@ export default function LockScreen() {
     let photoData: string | undefined
     try {
       if (cameraEnabled && (window as any).capturePhoto) {
-        photoData = (window as any).capturePhoto()
+        photoData = (window as any).capturePhoto() || undefined
+        if (!photoData) {
+          console.warn('[lockscreen] capturePhoto returned empty result')
+        }
+      } else if (cameraEnabled) {
+        console.warn('[lockscreen] capturePhoto is not available on window')
       }
     } catch (e) {
       console.error('Capture error:', e)

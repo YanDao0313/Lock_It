@@ -261,7 +261,7 @@ function normalizeUpdateConfig(update?: Partial<UpdateConfig>): UpdateConfig {
 }
 
 function isAutoLaunchSupported(): boolean {
-  return process.platform === 'win32' || process.platform === 'darwin'
+  return (process.platform === 'win32' || process.platform === 'darwin') && app.isPackaged
 }
 
 function applyAutoLaunchSetting(autoLaunch: boolean): boolean {
@@ -1113,9 +1113,6 @@ function setupIpcHandlers(): void {
     'verify-password-with-method',
     async (_, password: string): Promise<PasswordVerifyResult> => {
       const result = verifyPasswordAgainstConfig(password)
-      if (result.success) {
-        closeLockWindow()
-      }
       return result
     }
   )
@@ -1208,6 +1205,8 @@ function setupIpcHandlers(): void {
           fs.writeFileSync(photoPath, Buffer.from(base64Data, 'base64'))
 
           console.log('Photo saved:', photoPath)
+        } else {
+          console.warn('No photo data in unlock record')
         }
 
         const newRecord: UnlockRecord = {
@@ -1357,6 +1356,7 @@ app
   .then(async () => {
     await initModules()
 
+    app.setName('Lock It')
     electronApp.setAppUserModelId('com.electron.lockit')
 
     app.on('browser-window-created', (_, window) => {

@@ -712,7 +712,10 @@ export default function Setup() {
                   TOTP：{totpEnabled && totpSecret ? '已启用（与固定密码任一可解锁）' : '未启用'}
                 </p>
                 <p>锁屏时段：已配置</p>
-                <p>自动启动：{autoLaunchSupported ? (autoLaunch ? '已启用' : '未启用') : '当前平台不支持'}</p>
+                <p>
+                  自动启动：
+                  {autoLaunchSupported ? (autoLaunch ? '已启用' : '未启用') : '当前平台不支持'}
+                </p>
                 <p>界面样式：已配置</p>
               </div>
             </Card>

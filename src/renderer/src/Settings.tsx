@@ -1571,7 +1571,11 @@ export default function Settings() {
   const formatPreviewTime = (date: Date, format: string): string => {
     if (format === 'YYYY-MM-DD HH:mm') {
       const d = date.toLocaleDateString('zh-CN')
-      const t = date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+      const t = date.toLocaleTimeString('zh-CN', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      })
       return `${d} ${t}`
     }
 
@@ -2267,10 +2271,16 @@ export default function Settings() {
                           fontWeight: style.fontWeights.bottomText
                         }}
                       >
-                        <span className="whitespace-pre-line" style={{ textAlign: style.textAligns.bottomText }}>
+                        <span
+                          className="whitespace-pre-line"
+                          style={{ textAlign: style.textAligns.bottomText }}
+                        >
                           {style.bottomLeftText || '左下角文字'}
                         </span>
-                        <span className="whitespace-pre-line text-right" style={{ textAlign: style.textAligns.bottomText }}>
+                        <span
+                          className="whitespace-pre-line text-right"
+                          style={{ textAlign: style.textAligns.bottomText }}
+                        >
                           {style.bottomRightText || '右下角文字'}
                         </span>
                       </div>
@@ -2426,7 +2436,10 @@ export default function Settings() {
       </div>
 
       {showFullPreview && (
-        <div className="fixed inset-0 z-40" style={{ backgroundColor: previewColors.backgroundColor }}>
+        <div
+          className="fixed inset-0 z-40"
+          style={{ backgroundColor: previewColors.backgroundColor }}
+        >
           <button
             onClick={() => setShowFullPreview(false)}
             className="absolute top-4 right-4 z-50 px-3 py-2 text-sm border border-white/30 text-white/90 hover:bg-white/10"
@@ -2452,7 +2465,10 @@ export default function Settings() {
             </div>
           )}
 
-          <div className="h-full flex flex-col justify-center px-12" style={{ color: previewColors.textColor }}>
+          <div
+            className="h-full flex flex-col justify-center px-12"
+            style={{ color: previewColors.textColor }}
+          >
             {style.timePosition === 'center' && (
               <div
                 className="font-mono mb-5 opacity-70"
@@ -2489,13 +2505,19 @@ export default function Settings() {
           >
             <span
               className="whitespace-pre-line"
-              style={{ textAlign: style.textAligns.bottomText, fontWeight: style.fontWeights.bottomText }}
+              style={{
+                textAlign: style.textAligns.bottomText,
+                fontWeight: style.fontWeights.bottomText
+              }}
             >
               {style.bottomLeftText || '左下角文字'}
             </span>
             <span
               className="whitespace-pre-line text-right"
-              style={{ textAlign: style.textAligns.bottomText, fontWeight: style.fontWeights.bottomText }}
+              style={{
+                textAlign: style.textAligns.bottomText,
+                fontWeight: style.fontWeights.bottomText
+              }}
             >
               {style.bottomRightText || '右下角文字'}
             </span>
