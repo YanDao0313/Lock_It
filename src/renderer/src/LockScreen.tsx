@@ -266,6 +266,7 @@ export default function LockScreen() {
   const [selectedCamera, setSelectedCamera] = useState<string | undefined>(undefined)
   const [cameraConfigLoaded, setCameraConfigLoaded] = useState(false)
   const [attemptCount, setAttemptCount] = useState(0)
+  const [isStyleLoaded, setIsStyleLoaded] = useState(false)
 
   // 光标自动隐藏相关
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -274,37 +275,28 @@ export default function LockScreen() {
 
   // 加载样式
   useEffect(() => {
-    window.api.getStyle().then((config) => {
-      if (config) {
-        setStyle({
-          centerText: config.centerText || '此计算机因违规外联已被阻断',
-          subText: config.subText || '请等待安全部门与你联系',
-          bottomLeftText: config.bottomLeftText || '保密委员会办公室\n意识形态工作领导小组办公室',
-          bottomRightText: config.bottomRightText || '',
-          backgroundColor: config.backgroundColor || '#0066cc',
-          textColor: config.textColor || '#ffffff',
-          timePosition: config.timePosition || 'hidden',
-          timeFormat: config.timeFormat || 'HH:mm:ss',
-          closeScreenPrompt: config.closeScreenPrompt || '请关闭投影设备后继续',
-          fontSizes: config.fontSizes || {
-            centerText: 48,
-            subText: 24,
-            bottomText: 14,
-            timeText: 18
-          },
-          textAligns: config.textAligns || {
-            centerText: 'center',
-            subText: 'center',
-            bottomText: 'center'
-          },
-          fontWeights: config.fontWeights || {
-            centerText: 'medium',
-            subText: 'normal',
-            bottomText: 'normal'
-          }
-        })
-      }
-    })
+    window.api
+      .getStyle()
+      .then((config) => {
+        if (!config) return
+        setStyle((prev) => ({
+          centerText: config.centerText ?? prev.centerText,
+          subText: config.subText ?? prev.subText,
+          bottomLeftText: config.bottomLeftText ?? prev.bottomLeftText,
+          bottomRightText: config.bottomRightText ?? prev.bottomRightText,
+          backgroundColor: config.backgroundColor ?? prev.backgroundColor,
+          textColor: config.textColor ?? prev.textColor,
+          timePosition: config.timePosition ?? prev.timePosition,
+          timeFormat: config.timeFormat ?? prev.timeFormat,
+          closeScreenPrompt: config.closeScreenPrompt ?? prev.closeScreenPrompt,
+          fontSizes: config.fontSizes ?? prev.fontSizes,
+          textAligns: config.textAligns ?? prev.textAligns,
+          fontWeights: config.fontWeights ?? prev.fontWeights
+        }))
+      })
+      .finally(() => {
+        setIsStyleLoaded(true)
+      })
   }, [])
 
   // 加载选中的摄像头
@@ -540,6 +532,8 @@ export default function LockScreen() {
       }}
       onClick={handleBackgroundClick}
     >
+      {!isStyleLoaded ? null : (
+        <>
       <CameraCapture
         onCapture={() => {}}
         enabled={cameraEnabled && cameraConfigLoaded}
@@ -553,7 +547,7 @@ export default function LockScreen() {
           className={`whitespace-pre-line leading-relaxed ${alignClassMap[style.textAligns?.centerText || 'center']}`}
           style={{
             color: style.textColor,
-            fontSize: Math.min(style.fontSizes?.centerText || 48, 48),
+            fontSize: style.fontSizes?.centerText || 48,
             fontWeight: fontWeightMap[style.fontWeights?.centerText || 'medium']
           }}
         >
@@ -563,7 +557,7 @@ export default function LockScreen() {
           className={`opacity-80 whitespace-pre-line mt-4 ${alignClassMap[style.textAligns?.subText || 'center']}`}
           style={{
             color: style.textColor,
-            fontSize: Math.min(style.fontSizes?.subText || 24, 24),
+            fontSize: style.fontSizes?.subText || 24,
             fontWeight: fontWeightMap[style.fontWeights?.subText || 'normal']
           }}
         >
@@ -747,6 +741,8 @@ export default function LockScreen() {
             </p>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   )
