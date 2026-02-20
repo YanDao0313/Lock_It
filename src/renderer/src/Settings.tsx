@@ -1088,36 +1088,34 @@ function PasswordSection({
 
   const onlyDigits = /^\d*$/.test(newPassword)
   const isSixDigits = /^\d{6}$/.test(newPassword)
-  const newPasswordError =
-    !newPassword
-      ? ''
-      : !onlyDigits
+  const newPasswordError = !newPassword
+    ? ''
+    : !onlyDigits
+      ? lt(language, {
+          'zh-CN': '只能输入数字',
+          'en-US': 'Digits only',
+          'ja-JP': '数字のみ入力できます',
+          'ko-KR': '숫자만 입력할 수 있습니다'
+        })
+      : newPassword.length !== 6
         ? lt(language, {
-            'zh-CN': '只能输入数字',
-            'en-US': 'Digits only',
-            'ja-JP': '数字のみ入力できます',
-            'ko-KR': '숫자만 입력할 수 있습니다'
-          })
-        : newPassword.length !== 6
-          ? lt(language, {
-              'zh-CN': `需为 6 位数字（当前 ${newPassword.length} 位）`,
-              'en-US': `Must be 6 digits (currently ${newPassword.length})`,
-              'ja-JP': `6桁の数字が必要です（現在 ${newPassword.length} 桁）`,
-              'ko-KR': `6자리 숫자여야 합니다(현재 ${newPassword.length}자리)`
-            })
-          : ''
-
-  const confirmPasswordError =
-    !confirmPassword
-      ? ''
-      : confirmPassword !== newPassword
-        ? lt(language, {
-            'zh-CN': '两次输入不一致',
-            'en-US': 'The two entries do not match',
-            'ja-JP': '2回の入力が一致しません',
-            'ko-KR': '두 번 입력한 값이 일치하지 않습니다'
+            'zh-CN': `需为 6 位数字（当前 ${newPassword.length} 位）`,
+            'en-US': `Must be 6 digits (currently ${newPassword.length})`,
+            'ja-JP': `6桁の数字が必要です（現在 ${newPassword.length} 桁）`,
+            'ko-KR': `6자리 숫자여야 합니다(현재 ${newPassword.length}자리)`
           })
         : ''
+
+  const confirmPasswordError = !confirmPassword
+    ? ''
+    : confirmPassword !== newPassword
+      ? lt(language, {
+          'zh-CN': '两次输入不一致',
+          'en-US': 'The two entries do not match',
+          'ja-JP': '2回の入力が一致しません',
+          'ko-KR': '두 번 입력한 값이 일치하지 않습니다'
+        })
+      : ''
 
   const canSaveFixedPassword =
     fixedEditStep === 'edit' && isSixDigits && confirmPassword === newPassword && !isSavingFixedEdit
@@ -1488,7 +1486,10 @@ function PasswordSection({
                   })}
                 </p>
               )}
-              <Button onClick={() => void handleSaveFixedPassword()} disabled={!canSaveFixedPassword}>
+              <Button
+                onClick={() => void handleSaveFixedPassword()}
+                disabled={!canSaveFixedPassword}
+              >
                 {isSavingFixedEdit
                   ? lt(language, {
                       'zh-CN': '保存中...',
