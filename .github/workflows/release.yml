@@ -116,8 +116,11 @@ jobs:
             artifactSuffix: win-arm64
             targetArgs: --win nsis --arm64
           - os: macos-latest
-            artifactSuffix: mac-universal
-            targetArgs: --mac zip --universal
+            artifactSuffix: mac-x64
+            targetArgs: --mac zip --x64
+          - os: macos-latest
+            artifactSuffix: mac-arm64
+            targetArgs: --mac zip --arm64
           - os: ubuntu-latest
             artifactSuffix: linux
             targetArgs: --linux AppImage deb

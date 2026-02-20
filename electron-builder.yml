@@ -27,6 +27,14 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
+  universalApp:
+    # Universal 合并时，部分依赖会同时携带 x64/arm64 的预编译二进制（位于不同目录），
+    # 但它们会出现在两个架构的构建产物中，@electron/universal 需要显式声明为可共用文件。
+    singleArchFiles:
+      - '**/node_modules/@tailwindcss/oxide-darwin-arm64/**'
+      - '**/node_modules/@tailwindcss/oxide-darwin-x64/**'
+      - '**/node_modules/lightningcss-darwin-arm64/**'
+      - '**/node_modules/lightningcss-darwin-x64/**'
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
