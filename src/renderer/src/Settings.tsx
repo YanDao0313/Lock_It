@@ -688,19 +688,28 @@ function Card({
   children,
   className = '',
   title,
-  subtitle
+  subtitle,
+  headerAction
 }: {
   children: React.ReactNode
   className?: string
   title?: string
   subtitle?: string
+  headerAction?: React.ReactNode
 }) {
   return (
     <div className={`bg-white border border-neutral-200 ${className}`}>
       {(title || subtitle) && (
         <div className="px-6 py-4 border-b border-neutral-200">
-          {title && <h3 className="text-sm font-medium text-neutral-900 tracking-wide">{title}</h3>}
-          {subtitle && <p className="text-xs text-neutral-500 mt-1">{subtitle}</p>}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              {title && (
+                <h3 className="text-sm font-medium text-neutral-900 tracking-wide">{title}</h3>
+              )}
+              {subtitle && <p className="text-xs text-neutral-500 mt-1">{subtitle}</p>}
+            </div>
+            {headerAction && <div className="shrink-0">{headerAction}</div>}
+          </div>
         </div>
       )}
       <div className="p-6">{children}</div>
@@ -2415,6 +2424,7 @@ export default function Settings() {
   })
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [showAdvancedStyle, setShowAdvancedStyle] = useState(false)
+  const [showTextStyle, setShowTextStyle] = useState(false)
   const [previewNow, setPreviewNow] = useState<Date>(new Date())
   const [selectedDay, setSelectedDay] = useState<keyof WeeklySchedule>('monday')
   const [previewMode, setPreviewMode] = useState<'dark' | 'light'>('dark')
@@ -3266,211 +3276,6 @@ export default function Settings() {
 
                 <Card
                   title={lt(language, {
-                    'zh-CN': '文字透明度',
-                    'en-US': 'Text Opacity',
-                    'ja-JP': '文字の透明度',
-                    'ko-KR': '텍스트 투명도'
-                  })}
-                >
-                  <div className="space-y-3">
-                    <div className="border border-neutral-200 p-3 space-y-2">
-                      <Slider
-                        label={lt(language, {
-                          'zh-CN': '标题透明度',
-                          'en-US': 'Title Opacity',
-                          'ja-JP': 'タイトル透明度',
-                          'ko-KR': '제목 투명도'
-                        })}
-                        value={style.textOpacities?.centerText ?? style.textOpacity}
-                        min={0}
-                        max={100}
-                        unit="%"
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: v,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: getDefaultStyleConfig().textOpacities?.centerText || 100,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      >
-                        {lt(language, {
-                          'zh-CN': '还原标题透明度',
-                          'en-US': 'Reset Title Opacity',
-                          'ja-JP': 'タイトル透明度をリセット',
-                          'ko-KR': '제목 투명도 초기화'
-                        })}
-                      </Button>
-                    </div>
-
-                    <div className="border border-neutral-200 p-3 space-y-2">
-                      <Slider
-                        label={lt(language, {
-                          'zh-CN': '副标题透明度',
-                          'en-US': 'Subtitle Opacity',
-                          'ja-JP': 'サブタイトル透明度',
-                          'ko-KR': '부제목 투명도'
-                        })}
-                        value={style.textOpacities?.subText ?? style.textOpacity}
-                        min={0}
-                        max={100}
-                        unit="%"
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: v,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: getDefaultStyleConfig().textOpacities?.subText || 100,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      >
-                        {lt(language, {
-                          'zh-CN': '还原副标题透明度',
-                          'en-US': 'Reset Subtitle Opacity',
-                          'ja-JP': 'サブタイトル透明度をリセット',
-                          'ko-KR': '부제목 투명도 초기화'
-                        })}
-                      </Button>
-                    </div>
-
-                    <div className="border border-neutral-200 p-3 space-y-2">
-                      <Slider
-                        label={lt(language, {
-                          'zh-CN': '左下文字透明度',
-                          'en-US': 'Bottom Left Text Opacity',
-                          'ja-JP': '左下テキスト透明度',
-                          'ko-KR': '좌하단 텍스트 투명도'
-                        })}
-                        value={style.textOpacities?.bottomLeftText ?? style.textOpacity}
-                        min={0}
-                        max={100}
-                        unit="%"
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: v,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText:
-                                getDefaultStyleConfig().textOpacities?.bottomLeftText || 100,
-                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
-                            }
-                          }))
-                        }
-                      >
-                        {lt(language, {
-                          'zh-CN': '还原左下透明度',
-                          'en-US': 'Reset Bottom Left Opacity',
-                          'ja-JP': '左下透明度をリセット',
-                          'ko-KR': '좌하단 투명도 초기화'
-                        })}
-                      </Button>
-                    </div>
-
-                    <div className="border border-neutral-200 p-3 space-y-2">
-                      <Slider
-                        label={lt(language, {
-                          'zh-CN': '右下文字透明度',
-                          'en-US': 'Bottom Right Text Opacity',
-                          'ja-JP': '右下テキスト透明度',
-                          'ko-KR': '우하단 텍스트 투명도'
-                        })}
-                        value={style.textOpacities?.bottomRightText ?? style.textOpacity}
-                        min={0}
-                        max={100}
-                        unit="%"
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: v
-                            }
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setStyle((s) => ({
-                            ...s,
-                            textOpacities: {
-                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
-                              subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText:
-                                getDefaultStyleConfig().textOpacities?.bottomRightText || 100
-                            }
-                          }))
-                        }
-                      >
-                        {lt(language, {
-                          'zh-CN': '还原右下透明度',
-                          'en-US': 'Reset Bottom Right Opacity',
-                          'ja-JP': '右下透明度をリセット',
-                          'ko-KR': '우하단 투명도 초기화'
-                        })}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-
-                <Card
-                  title={lt(language, {
                     'zh-CN': '主题模式',
                     'en-US': 'Theme Mode',
                     'ja-JP': 'テーマモード',
@@ -3603,264 +3408,6 @@ export default function Settings() {
 
                 <Card
                   title={lt(language, {
-                    'zh-CN': '字体大小',
-                    'en-US': 'Font Size',
-                    'ja-JP': 'フォントサイズ',
-                    'ko-KR': '글자 크기'
-                  })}
-                >
-                  <div className="grid grid-cols-2 gap-6">
-                    <Slider
-                      label={lt(language, {
-                        'zh-CN': '主标题',
-                        'en-US': 'Main Title',
-                        'ja-JP': 'メイン見出し',
-                        'ko-KR': '메인 제목'
-                      })}
-                      value={style.fontSizes.centerText}
-                      min={8}
-                      max={300}
-                      onChange={(v) =>
-                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, centerText: v } }))
-                      }
-                    />
-                    <Slider
-                      label={lt(language, {
-                        'zh-CN': '副标题',
-                        'en-US': 'Subtitle',
-                        'ja-JP': 'サブタイトル',
-                        'ko-KR': '부제목'
-                      })}
-                      value={style.fontSizes.subText}
-                      min={8}
-                      max={240}
-                      onChange={(v) =>
-                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, subText: v } }))
-                      }
-                    />
-                    <Slider
-                      label={lt(language, {
-                        'zh-CN': '底部文字',
-                        'en-US': 'Bottom Text',
-                        'ja-JP': '下部テキスト',
-                        'ko-KR': '하단 텍스트'
-                      })}
-                      value={style.fontSizes.bottomText}
-                      min={6}
-                      max={200}
-                      onChange={(v) =>
-                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, bottomText: v } }))
-                      }
-                    />
-                    <Slider
-                      label={lt(language, {
-                        'zh-CN': '时间文字',
-                        'en-US': 'Time Text',
-                        'ja-JP': '時刻テキスト',
-                        'ko-KR': '시간 텍스트'
-                      })}
-                      value={style.fontSizes.timeText}
-                      min={6}
-                      max={200}
-                      onChange={(v) =>
-                        setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, timeText: v } }))
-                      }
-                    />
-                  </div>
-                </Card>
-
-                <Card
-                  title={lt(language, {
-                    'zh-CN': '文字对齐与字重',
-                    'en-US': 'Alignment & Weight',
-                    'ja-JP': '配置と太さ',
-                    'ko-KR': '정렬 및 두께'
-                  })}
-                >
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-3">
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '主标题对齐',
-                          'en-US': 'Main Title Align',
-                          'ja-JP': 'メイン見出しの配置',
-                          'ko-KR': '메인 제목 정렬'
-                        })}
-                      </label>
-                      <Select
-                        value={style.textAligns.centerText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textAligns: {
-                              ...s.textAligns,
-                              centerText: v as TextAlignConfig['centerText']
-                            }
-                          }))
-                        }
-                        options={textAlignOptions}
-                      />
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '主标题字重',
-                          'en-US': 'Main Title Weight',
-                          'ja-JP': 'メイン見出しの太さ',
-                          'ko-KR': '메인 제목 두께'
-                        })}
-                      </label>
-                      <Select
-                        value={style.fontWeights.centerText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            fontWeights: {
-                              ...s.fontWeights,
-                              centerText: v as FontWeightConfig['centerText']
-                            }
-                          }))
-                        }
-                        options={fontWeightOptions}
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '副标题对齐',
-                          'en-US': 'Subtitle Align',
-                          'ja-JP': 'サブタイトルの配置',
-                          'ko-KR': '부제목 정렬'
-                        })}
-                      </label>
-                      <Select
-                        value={style.textAligns.subText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textAligns: {
-                              ...s.textAligns,
-                              subText: v as TextAlignConfig['subText']
-                            }
-                          }))
-                        }
-                        options={textAlignOptions}
-                      />
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '副标题字重',
-                          'en-US': 'Subtitle Weight',
-                          'ja-JP': 'サブタイトルの太さ',
-                          'ko-KR': '부제목 두께'
-                        })}
-                      </label>
-                      <Select
-                        value={style.fontWeights.subText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            fontWeights: {
-                              ...s.fontWeights,
-                              subText: v as FontWeightConfig['subText']
-                            }
-                          }))
-                        }
-                        options={fontWeightOptions}
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '底部文字对齐',
-                          'en-US': 'Bottom Text Align',
-                          'ja-JP': '下部テキストの配置',
-                          'ko-KR': '하단 텍스트 정렬'
-                        })}
-                      </label>
-                      <Select
-                        value={style.textAligns.bottomText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textAligns: {
-                              ...s.textAligns,
-                              bottomText: v as TextAlignConfig['bottomText'],
-                              bottomLeftText: v as TextAlignConfig['bottomLeftText'],
-                              bottomRightText: v as TextAlignConfig['bottomRightText']
-                            }
-                          }))
-                        }
-                        options={textAlignOptions}
-                      />
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '左下文字对齐',
-                          'en-US': 'Bottom Left Align',
-                          'ja-JP': '左下テキスト配置',
-                          'ko-KR': '좌하단 텍스트 정렬'
-                        })}
-                      </label>
-                      <Select
-                        value={style.textAligns.bottomLeftText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textAligns: {
-                              ...s.textAligns,
-                              bottomLeftText: v as TextAlignConfig['bottomLeftText']
-                            }
-                          }))
-                        }
-                        options={textAlignOptions}
-                      />
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '右下文字对齐',
-                          'en-US': 'Bottom Right Align',
-                          'ja-JP': '右下テキスト配置',
-                          'ko-KR': '우하단 텍스트 정렬'
-                        })}
-                      </label>
-                      <Select
-                        value={style.textAligns.bottomRightText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            textAligns: {
-                              ...s.textAligns,
-                              bottomRightText: v as TextAlignConfig['bottomRightText']
-                            }
-                          }))
-                        }
-                        options={textAlignOptions}
-                      />
-                      <label className="block text-xs text-neutral-600">
-                        {lt(language, {
-                          'zh-CN': '底部文字字重',
-                          'en-US': 'Bottom Text Weight',
-                          'ja-JP': '下部テキストの太さ',
-                          'ko-KR': '하단 텍스트 두께'
-                        })}
-                      </label>
-                      <Select
-                        value={style.fontWeights.bottomText}
-                        onChange={(v) =>
-                          setStyle((s) => ({
-                            ...s,
-                            fontWeights: {
-                              ...s.fontWeights,
-                              bottomText: v as FontWeightConfig['bottomText']
-                            }
-                          }))
-                        }
-                        options={fontWeightOptions}
-                      />
-                    </div>
-                  </div>
-                </Card>
-
-                <Card
-                  title={lt(language, {
                     'zh-CN': '时间显示',
                     'en-US': 'Time Display',
                     'ja-JP': '時刻表示',
@@ -3899,6 +3446,492 @@ export default function Settings() {
                       />
                     </div>
                   </div>
+                </Card>
+
+                <Card
+                  title={lt(language, {
+                    'zh-CN': '文字样式',
+                    'en-US': 'Text Style',
+                    'ja-JP': 'テキストスタイル',
+                    'ko-KR': '텍스트 스타일'
+                  })}
+                  subtitle={lt(language, {
+                    'zh-CN': '包含透明度、字体大小、对齐和字重',
+                    'en-US': 'includes opacity, size, alignment, and weight.',
+                    'ja-JP': '透明度・サイズ・配置・太さを設定できます。',
+                    'ko-KR': '투명도/크기/정렬/두께를 설정합니다.'
+                  })}
+                  headerAction={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowTextStyle((v) => !v)}
+                    >
+                      <ChevronRight
+                        className={`w-4 h-4 mr-1.5 transition-transform ${showTextStyle ? 'rotate-90' : ''}`}
+                      />
+                      {showTextStyle
+                        ? lt(language, {
+                            'zh-CN': '收起',
+                            'en-US': 'Collapse',
+                            'ja-JP': '折りたたむ',
+                            'ko-KR': '접기'
+                          })
+                        : lt(language, {
+                            'zh-CN': '展开',
+                            'en-US': 'Expand',
+                            'ja-JP': '展開',
+                            'ko-KR': '펼치기'
+                          })}
+                    </Button>
+                  }
+                >
+                  {showTextStyle && (
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <div className="border border-neutral-200 p-3 space-y-2">
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '标题透明度',
+                              'en-US': 'Title Opacity',
+                              'ja-JP': 'タイトル透明度',
+                              'ko-KR': '제목 투명도'
+                            })}
+                            value={style.textOpacities?.centerText ?? style.textOpacity}
+                            min={0}
+                            max={100}
+                            unit="%"
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: v,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText:
+                                    getDefaultStyleConfig().textOpacities?.centerText || 100,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原标题透明度',
+                              'en-US': 'Reset Title Opacity',
+                              'ja-JP': 'タイトル透明度をリセット',
+                              'ko-KR': '제목 투명도 초기화'
+                            })}
+                          </Button>
+                        </div>
+
+                        <div className="border border-neutral-200 p-3 space-y-2">
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '副标题透明度',
+                              'en-US': 'Subtitle Opacity',
+                              'ja-JP': 'サブタイトル透明度',
+                              'ko-KR': '부제목 투명도'
+                            })}
+                            value={style.textOpacities?.subText ?? style.textOpacity}
+                            min={0}
+                            max={100}
+                            unit="%"
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: v,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: getDefaultStyleConfig().textOpacities?.subText || 100,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原副标题透明度',
+                              'en-US': 'Reset Subtitle Opacity',
+                              'ja-JP': 'サブタイトル透明度をリセット',
+                              'ko-KR': '부제목 투명도 초기화'
+                            })}
+                          </Button>
+                        </div>
+
+                        <div className="border border-neutral-200 p-3 space-y-2">
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '左下文字透明度',
+                              'en-US': 'Bottom Left Text Opacity',
+                              'ja-JP': '左下テキスト透明度',
+                              'ko-KR': '좌하단 텍스트 투명도'
+                            })}
+                            value={style.textOpacities?.bottomLeftText ?? style.textOpacity}
+                            min={0}
+                            max={100}
+                            unit="%"
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText: v,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText:
+                                    getDefaultStyleConfig().textOpacities?.bottomLeftText || 100,
+                                  bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原左下透明度',
+                              'en-US': 'Reset Bottom Left Opacity',
+                              'ja-JP': '左下透明度をリセット',
+                              'ko-KR': '좌하단 투명도 초기화'
+                            })}
+                          </Button>
+                        </div>
+
+                        <div className="border border-neutral-200 p-3 space-y-2">
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '右下文字透明度',
+                              'en-US': 'Bottom Right Text Opacity',
+                              'ja-JP': '右下テキスト透明度',
+                              'ko-KR': '우하단 텍스트 투명도'
+                            })}
+                            value={style.textOpacities?.bottomRightText ?? style.textOpacity}
+                            min={0}
+                            max={100}
+                            unit="%"
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText: v
+                                }
+                              }))
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                textOpacities: {
+                                  centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                                  subText: s.textOpacities?.subText ?? s.textOpacity,
+                                  bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                                  bottomRightText:
+                                    getDefaultStyleConfig().textOpacities?.bottomRightText || 100
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原右下透明度',
+                              'en-US': 'Reset Bottom Right Opacity',
+                              'ja-JP': '右下透明度をリセット',
+                              'ko-KR': '우하단 투명도 초기화'
+                            })}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <Slider
+                          label={lt(language, {
+                            'zh-CN': '主标题',
+                            'en-US': 'Main Title',
+                            'ja-JP': 'メイン見出し',
+                            'ko-KR': '메인 제목'
+                          })}
+                          value={style.fontSizes.centerText}
+                          min={8}
+                          max={300}
+                          onChange={(v) =>
+                            setStyle((s) => ({
+                              ...s,
+                              fontSizes: { ...s.fontSizes, centerText: v }
+                            }))
+                          }
+                        />
+                        <Slider
+                          label={lt(language, {
+                            'zh-CN': '副标题',
+                            'en-US': 'Subtitle',
+                            'ja-JP': 'サブタイトル',
+                            'ko-KR': '부제목'
+                          })}
+                          value={style.fontSizes.subText}
+                          min={8}
+                          max={240}
+                          onChange={(v) =>
+                            setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, subText: v } }))
+                          }
+                        />
+                        <Slider
+                          label={lt(language, {
+                            'zh-CN': '底部文字',
+                            'en-US': 'Bottom Text',
+                            'ja-JP': '下部テキスト',
+                            'ko-KR': '하단 텍스트'
+                          })}
+                          value={style.fontSizes.bottomText}
+                          min={6}
+                          max={200}
+                          onChange={(v) =>
+                            setStyle((s) => ({
+                              ...s,
+                              fontSizes: { ...s.fontSizes, bottomText: v }
+                            }))
+                          }
+                        />
+                        <Slider
+                          label={lt(language, {
+                            'zh-CN': '时间文字',
+                            'en-US': 'Time Text',
+                            'ja-JP': '時刻テキスト',
+                            'ko-KR': '시간 텍스트'
+                          })}
+                          value={style.fontSizes.timeText}
+                          min={6}
+                          max={200}
+                          onChange={(v) =>
+                            setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, timeText: v } }))
+                          }
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-3">
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '主标题对齐',
+                              'en-US': 'Main Title Align',
+                              'ja-JP': 'メイン見出しの配置',
+                              'ko-KR': '메인 제목 정렬'
+                            })}
+                          </label>
+                          <Select
+                            value={style.textAligns.centerText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textAligns: {
+                                  ...s.textAligns,
+                                  centerText: v as TextAlignConfig['centerText']
+                                }
+                              }))
+                            }
+                            options={textAlignOptions}
+                          />
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '主标题字重',
+                              'en-US': 'Main Title Weight',
+                              'ja-JP': 'メイン見出しの太さ',
+                              'ko-KR': '메인 제목 두께'
+                            })}
+                          </label>
+                          <Select
+                            value={style.fontWeights.centerText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                fontWeights: {
+                                  ...s.fontWeights,
+                                  centerText: v as FontWeightConfig['centerText']
+                                }
+                              }))
+                            }
+                            options={fontWeightOptions}
+                          />
+                        </div>
+
+                        <div className="space-y-3">
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '副标题对齐',
+                              'en-US': 'Subtitle Align',
+                              'ja-JP': 'サブタイトルの配置',
+                              'ko-KR': '부제목 정렬'
+                            })}
+                          </label>
+                          <Select
+                            value={style.textAligns.subText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textAligns: {
+                                  ...s.textAligns,
+                                  subText: v as TextAlignConfig['subText']
+                                }
+                              }))
+                            }
+                            options={textAlignOptions}
+                          />
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '副标题字重',
+                              'en-US': 'Subtitle Weight',
+                              'ja-JP': 'サブタイトルの太さ',
+                              'ko-KR': '부제목 두께'
+                            })}
+                          </label>
+                          <Select
+                            value={style.fontWeights.subText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                fontWeights: {
+                                  ...s.fontWeights,
+                                  subText: v as FontWeightConfig['subText']
+                                }
+                              }))
+                            }
+                            options={fontWeightOptions}
+                          />
+                        </div>
+
+                        <div className="space-y-3">
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '底部文字对齐',
+                              'en-US': 'Bottom Text Align',
+                              'ja-JP': '下部テキストの配置',
+                              'ko-KR': '하단 텍스트 정렬'
+                            })}
+                          </label>
+                          <Select
+                            value={style.textAligns.bottomText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textAligns: {
+                                  ...s.textAligns,
+                                  bottomText: v as TextAlignConfig['bottomText'],
+                                  bottomLeftText: v as TextAlignConfig['bottomLeftText'],
+                                  bottomRightText: v as TextAlignConfig['bottomRightText']
+                                }
+                              }))
+                            }
+                            options={textAlignOptions}
+                          />
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '左下文字对齐',
+                              'en-US': 'Bottom Left Align',
+                              'ja-JP': '左下テキスト配置',
+                              'ko-KR': '좌하단 텍스트 정렬'
+                            })}
+                          </label>
+                          <Select
+                            value={style.textAligns.bottomLeftText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textAligns: {
+                                  ...s.textAligns,
+                                  bottomLeftText: v as TextAlignConfig['bottomLeftText']
+                                }
+                              }))
+                            }
+                            options={textAlignOptions}
+                          />
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '右下文字对齐',
+                              'en-US': 'Bottom Right Align',
+                              'ja-JP': '右下テキスト配置',
+                              'ko-KR': '우하단 텍스트 정렬'
+                            })}
+                          </label>
+                          <Select
+                            value={style.textAligns.bottomRightText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                textAligns: {
+                                  ...s.textAligns,
+                                  bottomRightText: v as TextAlignConfig['bottomRightText']
+                                }
+                              }))
+                            }
+                            options={textAlignOptions}
+                          />
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '底部文字字重',
+                              'en-US': 'Bottom Text Weight',
+                              'ja-JP': '下部テキストの太さ',
+                              'ko-KR': '하단 텍스트 두께'
+                            })}
+                          </label>
+                          <Select
+                            value={style.fontWeights.bottomText}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                fontWeights: {
+                                  ...s.fontWeights,
+                                  bottomText: v as FontWeightConfig['bottomText']
+                                }
+                              }))
+                            }
+                            options={fontWeightOptions}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </Card>
 
                 <Card
@@ -4432,33 +4465,57 @@ export default function Settings() {
                     'ko-KR': '고급 설정'
                   })}
                   subtitle={lt(language, {
-                    'zh-CN': '默认折叠；展开后可配置宽度与各区域边距/偏移',
-                    'en-US': 'Collapsed by default. Expand for width and margin/offset tuning.',
-                    'ja-JP': '初期状態は折りたたみ。展開すると幅と余白/オフセットを調整できます。',
-                    'ko-KR': '기본은 접힘 상태이며, 펼치면 너비/여백/오프셋을 조정할 수 있습니다.'
+                    'zh-CN': '展开后可配置宽度与各区域边距/偏移',
+                    'en-US': 'Expand for width and margin/offset tuning.',
+                    'ja-JP': '展開すると幅と余白/オフセットを調整できます。',
+                    'ko-KR': '펼치면 너비/여백/오프셋을 조정할 수 있습니다.'
                   })}
+                  headerAction={
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setStyle((s) => ({
+                            ...s,
+                            layout: getDefaultStyleConfig().layout
+                          }))
+                        }
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1.5" />
+                        {lt(language, {
+                          'zh-CN': '一键还原',
+                          'en-US': 'Restore',
+                          'ja-JP': 'ワンクリック復元',
+                          'ko-KR': '원클릭 복원'
+                        })}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowAdvancedStyle((v) => !v)}
+                      >
+                        <ChevronRight
+                          className={`w-4 h-4 mr-1.5 transition-transform ${showAdvancedStyle ? 'rotate-90' : ''}`}
+                        />
+                        {showAdvancedStyle
+                          ? lt(language, {
+                              'zh-CN': '收起',
+                              'en-US': 'Collapse',
+                              'ja-JP': '折りたたむ',
+                              'ko-KR': '접기'
+                            })
+                          : lt(language, {
+                              'zh-CN': '展开',
+                              'en-US': 'Expand',
+                              'ja-JP': '展開',
+                              'ko-KR': '펼치기'
+                            })}
+                      </Button>
+                    </div>
+                  }
                 >
                   <div className="space-y-4">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowAdvancedStyle((v) => !v)}
-                    >
-                      {showAdvancedStyle
-                        ? lt(language, {
-                            'zh-CN': '收起高级设置',
-                            'en-US': 'Collapse Advanced',
-                            'ja-JP': '詳細設定を折りたたむ',
-                            'ko-KR': '고급 설정 접기'
-                          })
-                        : lt(language, {
-                            'zh-CN': '展开高级设置',
-                            'en-US': 'Expand Advanced',
-                            'ja-JP': '詳細設定を展開',
-                            'ko-KR': '고급 설정 펼치기'
-                          })}
-                    </Button>
-
                     {showAdvancedStyle && (
                       <>
                         <div className="grid grid-cols-2 gap-6">
