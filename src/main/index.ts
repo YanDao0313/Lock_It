@@ -44,15 +44,46 @@ interface FontSizeConfig {
 }
 
 interface TextAlignConfig {
-  centerText: 'left' | 'center' | 'right'
-  subText: 'left' | 'center' | 'right'
-  bottomText: 'left' | 'center' | 'right'
+  centerText: 'left' | 'center' | 'right' | 'justify'
+  subText: 'left' | 'center' | 'right' | 'justify'
+  bottomText: 'left' | 'center' | 'right' | 'justify'
+  bottomLeftText: 'left' | 'center' | 'right' | 'justify'
+  bottomRightText: 'left' | 'center' | 'right' | 'justify'
 }
 
 interface FontWeightConfig {
   centerText: 'light' | 'normal' | 'medium' | 'bold'
   subText: 'light' | 'normal' | 'medium' | 'bold'
   bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
+interface TextOpacityConfig {
+  centerText: number
+  subText: number
+  bottomLeftText: number
+  bottomRightText: number
+}
+
+interface ImageScaleConfig {
+  bottomLeft: number
+  bottomRight: number
+}
+
+type CornerContentMode = 'text' | 'image'
+
+interface LayoutConfig {
+  centerWidth: number
+  centerPadding: number
+  centerOffsetX: number
+  centerOffsetY: number
+  bottomLeftWidth: number
+  bottomLeftPadding: number
+  bottomRightWidth: number
+  bottomRightPadding: number
+  bottomOffsetX: number
+  bottomOffsetY: number
+  timeOffsetX: number
+  timeOffsetY: number
 }
 
 interface StyleConfig {
@@ -62,8 +93,15 @@ interface StyleConfig {
   subText: string
   bottomLeftText: string
   bottomRightText: string
+  bottomLeftMode: CornerContentMode
+  bottomRightMode: CornerContentMode
+  bottomLeftImage?: string
+  bottomRightImage?: string
   backgroundColor: string
   textColor: string
+  textOpacity: number
+  textOpacities: TextOpacityConfig
+  imageScales: ImageScaleConfig
   lightBackgroundColor?: string
   lightTextColor?: string
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
@@ -72,6 +110,7 @@ interface StyleConfig {
   fontSizes: FontSizeConfig
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
+  layout: LayoutConfig
 }
 
 interface PasswordConfig {
@@ -134,6 +173,7 @@ type PasswordVerifyResult = {
 // ============================================================================
 let mainWindow: BrowserWindow | null = null
 let lockWindow: BrowserWindow | null = null
+let previewWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let store: any = null
 let totpModule: TOTPModule | null = null
@@ -145,6 +185,11 @@ let settingsDirty = false
 let isHandlingMainClose = false
 let pendingSettingsCloseResolver: ((result: 'proceed' | 'cancel') => void) | null = null
 let updateCheckTimer: NodeJS.Timeout | null = null
+
+let previewStyleState: {
+  style: StyleConfig
+  mode: 'dark' | 'light'
+} | null = null
 
 const updaterState: {
   status:
@@ -184,7 +229,9 @@ const defaultFontSizes = (): FontSizeConfig => ({
 const defaultTextAligns = (): TextAlignConfig => ({
   centerText: 'center',
   subText: 'center',
-  bottomText: 'center'
+  bottomText: 'center',
+  bottomLeftText: 'left',
+  bottomRightText: 'right'
 })
 
 const defaultFontWeights = (): FontWeightConfig => ({
@@ -193,14 +240,44 @@ const defaultFontWeights = (): FontWeightConfig => ({
   bottomText: 'normal'
 })
 
+const defaultLayout = (): LayoutConfig => ({
+  centerWidth: 100,
+  centerPadding: 0,
+  centerOffsetX: 0,
+  centerOffsetY: 0,
+  bottomLeftWidth: 45,
+  bottomLeftPadding: 0,
+  bottomRightWidth: 45,
+  bottomRightPadding: 0,
+  bottomOffsetX: 32,
+  bottomOffsetY: 32,
+  timeOffsetX: 0,
+  timeOffsetY: 0
+})
+
 const defaultStyle = (): StyleConfig => ({
   themeMode: 'dark',
   centerText: '此计算机因违规外联已被阻断',
   subText: '请等待安全部门与你联系',
   bottomLeftText: '夏莱保密委员会办公室\n联邦学生会意识形态工作领导小组办公室',
   bottomRightText: '',
+  bottomLeftMode: 'text',
+  bottomRightMode: 'text',
+  bottomLeftImage: '',
+  bottomRightImage: '',
   backgroundColor: '#0066cc',
   textColor: '#ffffff',
+  textOpacity: 100,
+  textOpacities: {
+    centerText: 100,
+    subText: 100,
+    bottomLeftText: 100,
+    bottomRightText: 100
+  },
+  imageScales: {
+    bottomLeft: 100,
+    bottomRight: 100
+  },
   lightBackgroundColor: '#e0f2fe',
   lightTextColor: '#1e3a5f',
   timePosition: 'hidden',
@@ -208,7 +285,8 @@ const defaultStyle = (): StyleConfig => ({
   closeScreenPrompt: '请关闭班级大屏后再继续操作',
   fontSizes: defaultFontSizes(),
   textAligns: defaultTextAligns(),
-  fontWeights: defaultFontWeights()
+  fontWeights: defaultFontWeights(),
+  layout: defaultLayout()
 })
 
 const defaultStartup = (): StartupConfig => ({
@@ -226,21 +304,72 @@ function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
   const defaults = defaultStyle()
   const source = style || {}
 
+  const globalOpacity = normalizeTextOpacity(source.textOpacity, defaults.textOpacity)
+
   return {
     ...defaults,
     ...source,
+    textOpacity: globalOpacity,
+    textOpacities: normalizeTextOpacities(source.textOpacities, globalOpacity, defaults.textOpacities),
+    imageScales: normalizeImageScales(source.imageScales, defaults.imageScales),
+    bottomLeftMode: source.bottomLeftMode === 'image' ? 'image' : 'text',
+    bottomRightMode: source.bottomRightMode === 'image' ? 'image' : 'text',
     fontSizes: {
       ...defaults.fontSizes,
       ...(source.fontSizes || {})
     },
     textAligns: {
       ...defaults.textAligns,
-      ...(source.textAligns || {})
+      ...(source.textAligns || {}),
+      bottomLeftText:
+        source.textAligns?.bottomLeftText || source.textAligns?.bottomText || defaults.textAligns.bottomLeftText,
+      bottomRightText:
+        source.textAligns?.bottomRightText || source.textAligns?.bottomText || defaults.textAligns.bottomRightText
     },
     fontWeights: {
       ...defaults.fontWeights,
       ...(source.fontWeights || {})
+    },
+    layout: {
+      ...defaults.layout,
+      ...(source.layout || {})
     }
+  }
+}
+
+function normalizeTextOpacity(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback
+  return Math.max(0, Math.min(100, value))
+}
+
+function normalizeTextOpacities(
+  value: Partial<TextOpacityConfig> | undefined,
+  fallbackGlobal: number,
+  defaults: TextOpacityConfig
+): TextOpacityConfig {
+  return {
+    centerText: normalizeTextOpacity(value?.centerText, fallbackGlobal ?? defaults.centerText),
+    subText: normalizeTextOpacity(value?.subText, fallbackGlobal ?? defaults.subText),
+    bottomLeftText: normalizeTextOpacity(value?.bottomLeftText, fallbackGlobal ?? defaults.bottomLeftText),
+    bottomRightText: normalizeTextOpacity(
+      value?.bottomRightText,
+      fallbackGlobal ?? defaults.bottomRightText
+    )
+  }
+}
+
+function normalizeImageScales(
+  value: Partial<ImageScaleConfig> | undefined,
+  defaults: ImageScaleConfig
+): ImageScaleConfig {
+  const clampScale = (raw: number | undefined, fallback: number) => {
+    if (typeof raw !== 'number' || Number.isNaN(raw)) return fallback
+    return Math.max(10, Math.min(300, raw))
+  }
+
+  return {
+    bottomLeft: clampScale(value?.bottomLeft, defaults.bottomLeft),
+    bottomRight: clampScale(value?.bottomRight, defaults.bottomRight)
   }
 }
 
@@ -800,6 +929,37 @@ function createLockWindow(): BrowserWindow {
   return lockWindow
 }
 
+function createPreviewWindow(): BrowserWindow {
+  if (previewWindow && !previewWindow.isDestroyed()) {
+    previewWindow.show()
+    previewWindow.focus()
+    return previewWindow
+  }
+
+  previewWindow = new BrowserWindow({
+    fullscreen: true,
+    frame: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#000000',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    previewWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#preview`)
+  } else {
+    previewWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'preview' })
+  }
+
+  previewWindow.on('closed', () => {
+    previewWindow = null
+  })
+
+  return previewWindow
+}
+
 function closeLockWindow(): void {
   // 注销阻止的快捷键
   unregisterBlockingShortcuts()
@@ -1127,6 +1287,8 @@ function setupIpcHandlers(): void {
       const mergedStyle = normalizeStyle({
         ...currentStyle,
         ...config.style,
+        bottomLeftMode: config.style.bottomLeftMode || currentStyle.bottomLeftMode,
+        bottomRightMode: config.style.bottomRightMode || currentStyle.bottomRightMode,
         fontSizes: {
           ...currentStyle.fontSizes,
           ...(config.style.fontSizes || {})
@@ -1138,8 +1300,24 @@ function setupIpcHandlers(): void {
         fontWeights: {
           ...currentStyle.fontWeights,
           ...(config.style.fontWeights || {})
+        },
+        textOpacities: {
+          ...currentStyle.textOpacities,
+          ...(config.style.textOpacities || {})
+        },
+        imageScales: {
+          ...currentStyle.imageScales,
+          ...(config.style.imageScales || {})
+        },
+        layout: {
+          ...currentStyle.layout,
+          ...(config.style.layout || {})
         }
       })
+      mergedStyle.textOpacity = normalizeTextOpacity(
+        config.style.textOpacity,
+        mergedStyle.textOpacities.centerText
+      )
       store.set('style', mergedStyle)
     }
     if (config.language !== undefined) {
@@ -1194,6 +1372,49 @@ function setupIpcHandlers(): void {
       ...style,
       ...colors
     }
+  })
+
+  ipcMain.handle(
+    'open-preview-window',
+    (_, payload?: { style?: Partial<StyleConfig>; mode?: 'dark' | 'light' }) => {
+      const baseStyle = normalizeStyle(store.get('style') as Partial<StyleConfig>)
+      const mergedStyle = normalizeStyle({
+        ...baseStyle,
+        ...(payload?.style || {})
+      })
+      mergedStyle.textOpacity = normalizeTextOpacity(
+        payload?.style?.textOpacity,
+        mergedStyle.textOpacities.centerText
+      )
+
+      previewStyleState = {
+        style: mergedStyle,
+        mode: payload?.mode === 'light' ? 'light' : 'dark'
+      }
+
+      const window = createPreviewWindow()
+      window.webContents.once('did-finish-load', () => {
+        window.webContents.send('preview-style-updated', previewStyleState)
+      })
+      return true
+    }
+  )
+
+  ipcMain.handle('get-preview-style', () => {
+    if (previewStyleState) {
+      return previewStyleState
+    }
+    return {
+      style: normalizeStyle(store.get('style') as Partial<StyleConfig>),
+      mode: 'dark' as const
+    }
+  })
+
+  ipcMain.handle('close-preview-window', () => {
+    if (previewWindow && !previewWindow.isDestroyed()) {
+      previewWindow.close()
+    }
+    return true
   })
 
   // 验证密码

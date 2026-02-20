@@ -34,15 +34,34 @@ interface FontSizeConfig {
 }
 
 interface TextAlignConfig {
-  centerText: 'left' | 'center' | 'right'
-  subText: 'left' | 'center' | 'right'
-  bottomText: 'left' | 'center' | 'right'
+  centerText: 'left' | 'center' | 'right' | 'justify'
+  subText: 'left' | 'center' | 'right' | 'justify'
+  bottomText: 'left' | 'center' | 'right' | 'justify'
+  bottomLeftText: 'left' | 'center' | 'right' | 'justify'
+  bottomRightText: 'left' | 'center' | 'right' | 'justify'
 }
 
 interface FontWeightConfig {
   centerText: 'light' | 'normal' | 'medium' | 'bold'
   subText: 'light' | 'normal' | 'medium' | 'bold'
   bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
+type CornerContentMode = 'text' | 'image'
+
+interface LayoutConfig {
+  centerWidth: number
+  centerPadding: number
+  centerOffsetX: number
+  centerOffsetY: number
+  bottomLeftWidth: number
+  bottomLeftPadding: number
+  bottomRightWidth: number
+  bottomRightPadding: number
+  bottomOffsetX: number
+  bottomOffsetY: number
+  timeOffsetX: number
+  timeOffsetY: number
 }
 
 interface StyleConfig {
@@ -52,8 +71,23 @@ interface StyleConfig {
   subText: string
   bottomLeftText: string
   bottomRightText: string
+  bottomLeftMode: CornerContentMode
+  bottomRightMode: CornerContentMode
+  bottomLeftImage?: string
+  bottomRightImage?: string
   backgroundColor: string
   textColor: string
+  textOpacity: number
+  textOpacities: {
+    centerText: number
+    subText: number
+    bottomLeftText: number
+    bottomRightText: number
+  }
+  imageScales: {
+    bottomLeft: number
+    bottomRight: number
+  }
   lightBackgroundColor?: string
   lightTextColor?: string
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
@@ -62,6 +96,7 @@ interface StyleConfig {
   fontSizes: FontSizeConfig
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
+  layout: LayoutConfig
 }
 
 function generateDefaultTotpDeviceName(): string {
@@ -89,16 +124,51 @@ const defaultStyle = (): StyleConfig => ({
   subText: '请等待安全部门与你联系',
   bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
   bottomRightText: '',
+  bottomLeftMode: 'text',
+  bottomRightMode: 'text',
+  bottomLeftImage: '',
+  bottomRightImage: '',
   backgroundColor: '#0066cc',
   textColor: '#ffffff',
+  textOpacity: 100,
+  textOpacities: {
+    centerText: 100,
+    subText: 100,
+    bottomLeftText: 100,
+    bottomRightText: 100
+  },
+  imageScales: {
+    bottomLeft: 100,
+    bottomRight: 100
+  },
   lightBackgroundColor: '#fafafa',
   lightTextColor: '#171717',
   timePosition: 'hidden',
   timeFormat: 'HH:mm:ss',
   closeScreenPrompt: '请关闭班级大屏后再继续操作',
   fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
-  textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
-  fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
+  textAligns: {
+    centerText: 'center',
+    subText: 'center',
+    bottomText: 'center',
+    bottomLeftText: 'left',
+    bottomRightText: 'right'
+  },
+  fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' },
+  layout: {
+    centerWidth: 100,
+    centerPadding: 0,
+    centerOffsetX: 0,
+    centerOffsetY: 0,
+    bottomLeftWidth: 45,
+    bottomLeftPadding: 0,
+    bottomRightWidth: 45,
+    bottomRightPadding: 0,
+    bottomOffsetX: 32,
+    bottomOffsetY: 32,
+    timeOffsetX: 0,
+    timeOffsetY: 0
+  }
 })
 
 function Card({

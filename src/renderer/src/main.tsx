@@ -4,6 +4,7 @@ import './assets/main.css'
 import LockScreen from './LockScreen'
 import Setup from './Setup'
 import Settings from './Settings'
+import PreviewScreen from './PreviewScreen'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -27,6 +28,13 @@ function renderByHash() {
       root.render(
         <React.StrictMode>
           <Settings />
+        </React.StrictMode>
+      )
+      break
+    case 'preview':
+      root.render(
+        <React.StrictMode>
+          <PreviewScreen />
         </React.StrictMode>
       )
       break

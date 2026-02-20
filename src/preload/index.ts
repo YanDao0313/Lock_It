@@ -31,15 +31,46 @@ export interface FontSizeConfig {
 }
 
 export interface TextAlignConfig {
-  centerText: 'left' | 'center' | 'right'
-  subText: 'left' | 'center' | 'right'
-  bottomText: 'left' | 'center' | 'right'
+  centerText: 'left' | 'center' | 'right' | 'justify'
+  subText: 'left' | 'center' | 'right' | 'justify'
+  bottomText: 'left' | 'center' | 'right' | 'justify'
+  bottomLeftText: 'left' | 'center' | 'right' | 'justify'
+  bottomRightText: 'left' | 'center' | 'right' | 'justify'
 }
 
 export interface FontWeightConfig {
   centerText: 'light' | 'normal' | 'medium' | 'bold'
   subText: 'light' | 'normal' | 'medium' | 'bold'
   bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
+export interface TextOpacityConfig {
+  centerText: number
+  subText: number
+  bottomLeftText: number
+  bottomRightText: number
+}
+
+export interface ImageScaleConfig {
+  bottomLeft: number
+  bottomRight: number
+}
+
+export type CornerContentMode = 'text' | 'image'
+
+export interface LayoutConfig {
+  centerWidth: number
+  centerPadding: number
+  centerOffsetX: number
+  centerOffsetY: number
+  bottomLeftWidth: number
+  bottomLeftPadding: number
+  bottomRightWidth: number
+  bottomRightPadding: number
+  bottomOffsetX: number
+  bottomOffsetY: number
+  timeOffsetX: number
+  timeOffsetY: number
 }
 
 export interface StyleConfig {
@@ -49,8 +80,15 @@ export interface StyleConfig {
   subText: string
   bottomLeftText: string
   bottomRightText: string
+  bottomLeftMode: CornerContentMode
+  bottomRightMode: CornerContentMode
+  bottomLeftImage?: string
+  bottomRightImage?: string
   backgroundColor: string
   textColor: string
+  textOpacity: number
+  textOpacities: TextOpacityConfig
+  imageScales: ImageScaleConfig
   lightBackgroundColor?: string
   lightTextColor?: string
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
@@ -59,6 +97,7 @@ export interface StyleConfig {
   fontSizes: FontSizeConfig
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
+  layout: LayoutConfig
 }
 
 export interface UnlockRecord {
@@ -210,6 +249,16 @@ export interface API {
   checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
   getUpdateStatus: () => Promise<UpdateStatus>
   installDownloadedUpdate: () => Promise<boolean>
+
+  openPreviewWindow: (payload: {
+    style: Partial<StyleConfig>
+    mode: 'dark' | 'light'
+  }) => Promise<boolean>
+  getPreviewStyle: () => Promise<{ style: StyleConfig; mode: 'dark' | 'light' }>
+  closePreviewWindow: () => Promise<boolean>
+  onPreviewStyleUpdated: (
+    callback: (payload: { style: StyleConfig; mode: 'dark' | 'light' }) => void
+  ) => void
 }
 
 // ============================================================================
@@ -281,7 +330,17 @@ contextBridge.exposeInMainWorld('api', {
 
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
-  installDownloadedUpdate: () => ipcRenderer.invoke('install-downloaded-update')
+  installDownloadedUpdate: () => ipcRenderer.invoke('install-downloaded-update'),
+
+  openPreviewWindow: (payload: { style: Partial<StyleConfig>; mode: 'dark' | 'light' }) =>
+    ipcRenderer.invoke('open-preview-window', payload),
+  getPreviewStyle: () => ipcRenderer.invoke('get-preview-style'),
+  closePreviewWindow: () => ipcRenderer.invoke('close-preview-window'),
+  onPreviewStyleUpdated: (
+    callback: (payload: { style: StyleConfig; mode: 'dark' | 'light' }) => void
+  ) => {
+    ipcRenderer.on('preview-style-updated', (_, payload) => callback(payload))
+  }
 } as API)
 
 // 类型声明

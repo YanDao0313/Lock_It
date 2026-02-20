@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Delete, AlertTriangle, Camera } from 'lucide-react'
 import { AppLanguage, normalizeLanguage, t } from './i18n'
+import LockScreenView from './components/LockScreenView'
 
 // ============================================================================
 // 类型定义
@@ -13,9 +14,11 @@ interface FontSizeConfig {
 }
 
 interface TextAlignConfig {
-  centerText: 'left' | 'center' | 'right'
-  subText: 'left' | 'center' | 'right'
-  bottomText: 'left' | 'center' | 'right'
+  centerText: 'left' | 'center' | 'right' | 'justify'
+  subText: 'left' | 'center' | 'right' | 'justify'
+  bottomText: 'left' | 'center' | 'right' | 'justify'
+  bottomLeftText: 'left' | 'center' | 'right' | 'justify'
+  bottomRightText: 'left' | 'center' | 'right' | 'justify'
 }
 
 interface FontWeightConfig {
@@ -24,19 +27,52 @@ interface FontWeightConfig {
   bottomText: 'light' | 'normal' | 'medium' | 'bold'
 }
 
+type CornerContentMode = 'text' | 'image'
+
+interface LayoutConfig {
+  centerWidth: number
+  centerPadding: number
+  centerOffsetX: number
+  centerOffsetY: number
+  bottomLeftWidth: number
+  bottomLeftPadding: number
+  bottomRightWidth: number
+  bottomRightPadding: number
+  bottomOffsetX: number
+  bottomOffsetY: number
+  timeOffsetX: number
+  timeOffsetY: number
+}
+
 interface StyleConfig {
   centerText: string
   subText: string
   bottomLeftText: string
   bottomRightText: string
+  bottomLeftMode: CornerContentMode
+  bottomRightMode: CornerContentMode
+  bottomLeftImage?: string
+  bottomRightImage?: string
   backgroundColor: string
   textColor: string
+  textOpacity: number
+  textOpacities: {
+    centerText: number
+    subText: number
+    bottomLeftText: number
+    bottomRightText: number
+  }
+  imageScales: {
+    bottomLeft: number
+    bottomRight: number
+  }
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
   timeFormat: string
   closeScreenPrompt: string
   fontSizes: FontSizeConfig
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
+  layout: LayoutConfig
 }
 
 interface UnlockRecord {
@@ -250,14 +286,49 @@ export default function LockScreen() {
     subText: '请等待安全部门与你联系',
     bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
     bottomRightText: '',
+    bottomLeftMode: 'text',
+    bottomRightMode: 'text',
+    bottomLeftImage: '',
+    bottomRightImage: '',
     backgroundColor: '#0066cc',
     textColor: '#ffffff',
+    textOpacity: 100,
+    textOpacities: {
+      centerText: 100,
+      subText: 100,
+      bottomLeftText: 100,
+      bottomRightText: 100
+    },
+    imageScales: {
+      bottomLeft: 100,
+      bottomRight: 100
+    },
     timePosition: 'hidden',
     timeFormat: 'HH:mm:ss',
     closeScreenPrompt: '请关闭投影设备后继续',
     fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
-    textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
-    fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
+    textAligns: {
+      centerText: 'center',
+      subText: 'center',
+      bottomText: 'center',
+      bottomLeftText: 'left',
+      bottomRightText: 'right'
+    },
+    fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' },
+    layout: {
+      centerWidth: 100,
+      centerPadding: 0,
+      centerOffsetX: 0,
+      centerOffsetY: 0,
+      bottomLeftWidth: 45,
+      bottomLeftPadding: 0,
+      bottomRightWidth: 45,
+      bottomRightPadding: 0,
+      bottomOffsetX: 32,
+      bottomOffsetY: 32,
+      timeOffsetX: 0,
+      timeOffsetY: 0
+    }
   })
 
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -291,20 +362,76 @@ export default function LockScreen() {
       .getStyle()
       .then((config) => {
         if (!config) return
-        setStyle((prev) => ({
-          centerText: config.centerText ?? prev.centerText,
-          subText: config.subText ?? prev.subText,
-          bottomLeftText: config.bottomLeftText ?? prev.bottomLeftText,
-          bottomRightText: config.bottomRightText ?? prev.bottomRightText,
-          backgroundColor: config.backgroundColor ?? prev.backgroundColor,
-          textColor: config.textColor ?? prev.textColor,
-          timePosition: config.timePosition ?? prev.timePosition,
-          timeFormat: config.timeFormat ?? prev.timeFormat,
-          closeScreenPrompt: config.closeScreenPrompt ?? prev.closeScreenPrompt,
-          fontSizes: config.fontSizes ?? prev.fontSizes,
-          textAligns: config.textAligns ?? prev.textAligns,
-          fontWeights: config.fontWeights ?? prev.fontWeights
-        }))
+        setStyle((prev) => {
+          const fallbackOpacity =
+            typeof config.textOpacity === 'number'
+              ? Math.max(0, Math.min(100, config.textOpacity))
+              : prev.textOpacity
+
+          return {
+            centerText: config.centerText ?? prev.centerText,
+            subText: config.subText ?? prev.subText,
+            bottomLeftText: config.bottomLeftText ?? prev.bottomLeftText,
+            bottomRightText: config.bottomRightText ?? prev.bottomRightText,
+            bottomLeftMode: config.bottomLeftMode === 'image' ? 'image' : prev.bottomLeftMode,
+            bottomRightMode: config.bottomRightMode === 'image' ? 'image' : prev.bottomRightMode,
+            bottomLeftImage: config.bottomLeftImage ?? prev.bottomLeftImage,
+            bottomRightImage: config.bottomRightImage ?? prev.bottomRightImage,
+            backgroundColor: config.backgroundColor ?? prev.backgroundColor,
+            textColor: config.textColor ?? prev.textColor,
+            textOpacity:
+              typeof config.textOpacity === 'number' ? config.textOpacity : prev.textOpacity,
+            textOpacities: {
+              centerText:
+                typeof config.textOpacities?.centerText === 'number'
+                  ? Math.max(0, Math.min(100, config.textOpacities.centerText))
+                  : fallbackOpacity,
+              subText:
+                typeof config.textOpacities?.subText === 'number'
+                  ? Math.max(0, Math.min(100, config.textOpacities.subText))
+                  : fallbackOpacity,
+              bottomLeftText:
+                typeof config.textOpacities?.bottomLeftText === 'number'
+                  ? Math.max(0, Math.min(100, config.textOpacities.bottomLeftText))
+                  : fallbackOpacity,
+              bottomRightText:
+                typeof config.textOpacities?.bottomRightText === 'number'
+                  ? Math.max(0, Math.min(100, config.textOpacities.bottomRightText))
+                  : fallbackOpacity
+            },
+            imageScales: {
+              bottomLeft:
+                typeof config.imageScales?.bottomLeft === 'number'
+                  ? Math.max(10, Math.min(300, config.imageScales.bottomLeft))
+                  : prev.imageScales.bottomLeft,
+              bottomRight:
+                typeof config.imageScales?.bottomRight === 'number'
+                  ? Math.max(10, Math.min(300, config.imageScales.bottomRight))
+                  : prev.imageScales.bottomRight
+            },
+            timePosition: config.timePosition ?? prev.timePosition,
+            timeFormat: config.timeFormat ?? prev.timeFormat,
+            closeScreenPrompt: config.closeScreenPrompt ?? prev.closeScreenPrompt,
+            fontSizes: config.fontSizes ?? prev.fontSizes,
+            textAligns: {
+              ...prev.textAligns,
+              ...(config.textAligns || {}),
+              bottomLeftText:
+                config.textAligns?.bottomLeftText ||
+                config.textAligns?.bottomText ||
+                prev.textAligns.bottomLeftText,
+              bottomRightText:
+                config.textAligns?.bottomRightText ||
+                config.textAligns?.bottomText ||
+                prev.textAligns.bottomRightText
+            },
+            fontWeights: config.fontWeights ?? prev.fontWeights,
+            layout: {
+              ...prev.layout,
+              ...(config.layout || {})
+            }
+          }
+        })
       })
       .finally(() => {
         setIsStyleLoaded(true)
@@ -490,58 +617,10 @@ export default function LockScreen() {
     setUnlockReady(true)
   }
 
-  const alignClassMap = {
-    left: 'text-left',
-    center: 'text-center',
-    right: 'text-right'
-  } as const
-
-  const fontWeightMap = {
-    light: 300,
-    normal: 400,
-    medium: 500,
-    bold: 700
-  } as const
-
-  const formatTime = (date: Date): string => {
-    const format = style.timeFormat || 'HH:mm:ss'
-    const pad = (n: number) => n.toString().padStart(2, '0')
-    return format
-      .replace('HH', pad(date.getHours()))
-      .replace('mm', pad(date.getMinutes()))
-      .replace('ss', pad(date.getSeconds()))
-      .replace('YYYY', date.getFullYear().toString())
-      .replace('MM', pad(date.getMonth() + 1))
-      .replace('DD', pad(date.getDate()))
-  }
-
-  const renderTime = () => {
-    if (style.timePosition === 'hidden') return null
-    const positions = {
-      'top-left': 'fixed top-8 left-8',
-      'top-right': 'fixed top-8 right-8',
-      'bottom-left': 'fixed bottom-8 left-8',
-      'bottom-right': 'fixed bottom-8 right-8',
-      center: 'mb-6'
-    }
-    return (
-      <div
-        className={`${positions[style.timePosition]} font-mono opacity-70`}
-        style={{
-          color: style.textColor,
-          fontSize: style.fontSizes?.timeText || 18,
-          textAlign: style.textAligns?.subText || 'center'
-        }}
-      >
-        {formatTime(currentTime)}
-      </div>
-    )
-  }
-
   return (
     <div
       ref={containerRef}
-      className="min-h-screen w-full flex flex-col items-center justify-center p-8 select-none cursor-default"
+      className="h-screen w-screen relative overflow-hidden select-none cursor-default"
       style={{
         backgroundColor: style.backgroundColor,
         color: style.textColor,
@@ -557,48 +636,13 @@ export default function LockScreen() {
             selectedDeviceId={selectedCamera}
             language={language}
           />
-          {renderTime()}
-
-          {/* 主内容 */}
-          <div className="max-w-4xl w-full">
-            <h1
-              className={`whitespace-pre-line leading-relaxed ${alignClassMap[style.textAligns?.centerText || 'center']}`}
-              style={{
-                color: style.textColor,
-                fontSize: style.fontSizes?.centerText || 48,
-                fontWeight: fontWeightMap[style.fontWeights?.centerText || 'medium']
-              }}
-            >
-              {style.centerText}
-            </h1>
-            <p
-              className={`opacity-80 whitespace-pre-line mt-4 ${alignClassMap[style.textAligns?.subText || 'center']}`}
-              style={{
-                color: style.textColor,
-                fontSize: style.fontSizes?.subText || 24,
-                fontWeight: fontWeightMap[style.fontWeights?.subText || 'normal']
-              }}
-            >
-              {style.subText}
-            </p>
-          </div>
-
-          {/* 底部文字 */}
-          <div
-            className="fixed bottom-8 left-8 right-8 flex items-end justify-between gap-8 opacity-60 pointer-events-none"
-            style={{
-              color: style.textColor,
-              fontSize: style.fontSizes?.bottomText || 14,
-              fontWeight: fontWeightMap[style.fontWeights?.bottomText || 'normal']
-            }}
-          >
-            <span className="whitespace-pre-line text-left max-w-[45%]">
-              {style.bottomLeftText}
-            </span>
-            <span className="whitespace-pre-line text-right max-w-[45%]">
-              {style.bottomRightText}
-            </span>
-          </div>
+          <LockScreenView
+            style={style}
+            currentTime={currentTime}
+            backgroundColor={style.backgroundColor}
+            textColor={style.textColor}
+            className="absolute inset-0 pointer-events-none"
+          />
 
           {/* 关闭设备提示 - 第一步 */}
           {showClosePrompt && (
@@ -618,8 +662,8 @@ export default function LockScreen() {
                   <AlertTriangle className="w-6 h-6" style={{ color: style.textColor }} />
                 </div>
                 <h3
-                  className={`text-lg mb-4 whitespace-pre-line ${alignClassMap[style.textAligns?.centerText || 'center']}`}
-                  style={{ color: style.textColor }}
+                  className="text-lg mb-4 whitespace-pre-line"
+                  style={{ color: style.textColor, textAlign: style.textAligns?.centerText || 'center' }}
                 >
                   {style.closeScreenPrompt}
                 </h3>

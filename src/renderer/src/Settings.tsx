@@ -32,6 +32,7 @@ import {
   normalizeLanguage,
   t
 } from './i18n'
+import LockScreenView from './components/LockScreenView'
 
 // ============================================================================
 // 类型定义
@@ -64,15 +65,34 @@ interface FontSizeConfig {
 }
 
 interface TextAlignConfig {
-  centerText: 'left' | 'center' | 'right'
-  subText: 'left' | 'center' | 'right'
-  bottomText: 'left' | 'center' | 'right'
+  centerText: 'left' | 'center' | 'right' | 'justify'
+  subText: 'left' | 'center' | 'right' | 'justify'
+  bottomText: 'left' | 'center' | 'right' | 'justify'
+  bottomLeftText: 'left' | 'center' | 'right' | 'justify'
+  bottomRightText: 'left' | 'center' | 'right' | 'justify'
 }
 
 interface FontWeightConfig {
   centerText: 'light' | 'normal' | 'medium' | 'bold'
   subText: 'light' | 'normal' | 'medium' | 'bold'
   bottomText: 'light' | 'normal' | 'medium' | 'bold'
+}
+
+type CornerContentMode = 'text' | 'image'
+
+interface LayoutConfig {
+  centerWidth: number
+  centerPadding: number
+  centerOffsetX: number
+  centerOffsetY: number
+  bottomLeftWidth: number
+  bottomLeftPadding: number
+  bottomRightWidth: number
+  bottomRightPadding: number
+  bottomOffsetX: number
+  bottomOffsetY: number
+  timeOffsetX: number
+  timeOffsetY: number
 }
 
 interface StyleConfig {
@@ -82,8 +102,23 @@ interface StyleConfig {
   subText: string
   bottomLeftText: string
   bottomRightText: string
+  bottomLeftMode: CornerContentMode
+  bottomRightMode: CornerContentMode
+  bottomLeftImage?: string
+  bottomRightImage?: string
   backgroundColor: string
   textColor: string
+  textOpacity: number
+  textOpacities: {
+    centerText: number
+    subText: number
+    bottomLeftText: number
+    bottomRightText: number
+  }
+  imageScales: {
+    bottomLeft: number
+    bottomRight: number
+  }
   lightBackgroundColor?: string
   lightTextColor?: string
   timePosition: 'hidden' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
@@ -92,6 +127,7 @@ interface StyleConfig {
   fontSizes: FontSizeConfig
   textAligns: TextAlignConfig
   fontWeights: FontWeightConfig
+  layout: LayoutConfig
 }
 
 interface PasswordConfig {
@@ -478,6 +514,15 @@ function getTextAlignOptions(language: AppLanguage) {
         'ja-JP': '右寄せ',
         'ko-KR': '오른쪽 정렬'
       })
+    },
+    {
+      value: 'justify',
+      label: lt(language, {
+        'zh-CN': '两端分散对齐',
+        'en-US': 'Justify',
+        'ja-JP': '両端揃え',
+        'ko-KR': '양쪽 정렬'
+      })
     }
   ]
 }
@@ -501,6 +546,137 @@ function getFontWeightOptions(language: AppLanguage) {
       label: lt(language, { 'zh-CN': '粗体', 'en-US': 'Bold', 'ja-JP': '太字', 'ko-KR': '굵게' })
     }
   ]
+}
+
+function getDefaultStyleConfig(): StyleConfig {
+  return {
+    themeMode: 'dark',
+    centerText: '此计算机因违规外联已被阻断',
+    subText: '请等待安全部门与你联系',
+    bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
+    bottomRightText: '',
+    bottomLeftMode: 'text',
+    bottomRightMode: 'text',
+    bottomLeftImage: '',
+    bottomRightImage: '',
+    backgroundColor: '#0066cc',
+    textColor: '#ffffff',
+    textOpacity: 100,
+    textOpacities: {
+      centerText: 100,
+      subText: 100,
+      bottomLeftText: 100,
+      bottomRightText: 100
+    },
+    imageScales: {
+      bottomLeft: 100,
+      bottomRight: 100
+    },
+    lightBackgroundColor: '#fafafa',
+    lightTextColor: '#171717',
+    timePosition: 'hidden',
+    timeFormat: 'HH:mm:ss',
+    closeScreenPrompt: '请关闭投影设备后继续',
+    fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
+    textAligns: {
+      centerText: 'center',
+      subText: 'center',
+      bottomText: 'center',
+      bottomLeftText: 'left',
+      bottomRightText: 'right'
+    },
+    fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' },
+    layout: {
+      centerWidth: 100,
+      centerPadding: 0,
+      centerOffsetX: 0,
+      centerOffsetY: 0,
+      bottomLeftWidth: 45,
+      bottomLeftPadding: 0,
+      bottomRightWidth: 45,
+      bottomRightPadding: 0,
+      bottomOffsetX: 32,
+      bottomOffsetY: 32,
+      timeOffsetX: 0,
+      timeOffsetY: 0
+    }
+  }
+}
+
+function normalizeStyleConfig(style?: Partial<StyleConfig>): StyleConfig {
+  const defaults = getDefaultStyleConfig()
+  const source = style || {}
+
+  return {
+    ...defaults,
+    ...source,
+    textOpacity:
+      typeof source.textOpacity === 'number'
+        ? Math.max(0, Math.min(100, source.textOpacity))
+        : defaults.textOpacity,
+    textOpacities: {
+      centerText:
+        typeof source.textOpacities?.centerText === 'number'
+          ? Math.max(0, Math.min(100, source.textOpacities.centerText))
+          : typeof source.textOpacity === 'number'
+            ? Math.max(0, Math.min(100, source.textOpacity))
+            : defaults.textOpacities?.centerText || 100,
+      subText:
+        typeof source.textOpacities?.subText === 'number'
+          ? Math.max(0, Math.min(100, source.textOpacities.subText))
+          : typeof source.textOpacity === 'number'
+            ? Math.max(0, Math.min(100, source.textOpacity))
+            : defaults.textOpacities?.subText || 100,
+      bottomLeftText:
+        typeof source.textOpacities?.bottomLeftText === 'number'
+          ? Math.max(0, Math.min(100, source.textOpacities.bottomLeftText))
+          : typeof source.textOpacity === 'number'
+            ? Math.max(0, Math.min(100, source.textOpacity))
+            : defaults.textOpacities?.bottomLeftText || 100,
+      bottomRightText:
+        typeof source.textOpacities?.bottomRightText === 'number'
+          ? Math.max(0, Math.min(100, source.textOpacities.bottomRightText))
+          : typeof source.textOpacity === 'number'
+            ? Math.max(0, Math.min(100, source.textOpacity))
+            : defaults.textOpacities?.bottomRightText || 100
+    },
+    imageScales: {
+      bottomLeft:
+        typeof source.imageScales?.bottomLeft === 'number'
+          ? Math.max(10, Math.min(300, source.imageScales.bottomLeft))
+          : defaults.imageScales?.bottomLeft || 100,
+      bottomRight:
+        typeof source.imageScales?.bottomRight === 'number'
+          ? Math.max(10, Math.min(300, source.imageScales.bottomRight))
+          : defaults.imageScales?.bottomRight || 100
+    },
+    bottomLeftMode: source.bottomLeftMode === 'image' ? 'image' : 'text',
+    bottomRightMode: source.bottomRightMode === 'image' ? 'image' : 'text',
+    fontSizes: {
+      ...defaults.fontSizes,
+      ...(source.fontSizes || {})
+    },
+    textAligns: {
+      ...defaults.textAligns,
+      ...(source.textAligns || {}),
+      bottomLeftText:
+        source.textAligns?.bottomLeftText ||
+        source.textAligns?.bottomText ||
+        defaults.textAligns.bottomLeftText,
+      bottomRightText:
+        source.textAligns?.bottomRightText ||
+        source.textAligns?.bottomText ||
+        defaults.textAligns.bottomRightText
+    },
+    fontWeights: {
+      ...defaults.fontWeights,
+      ...(source.fontWeights || {})
+    },
+    layout: {
+      ...defaults.layout,
+      ...(source.layout || {})
+    }
+  }
 }
 
 // ============================================================================
@@ -683,33 +859,50 @@ function Slider({
   min,
   max,
   onChange,
-  label
+  label,
+  unit = 'px'
 }: {
   value: number
   min: number
   max: number
   onChange: (value: number) => void
   label: string
+  unit?: string
 }) {
+  const clamp = (input: number) => Math.max(min, Math.min(max, Number.isNaN(input) ? min : input))
+
   return (
     <div className="space-y-2">
       <div className="flex justify-between text-xs text-neutral-600">
         <span>{label}</span>
-        <span className="font-mono">{value}px</span>
+        <span className="font-mono">{value}{unit}</span>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-1 bg-neutral-200 rounded-none appearance-none cursor-pointer
-          [&::-webkit-slider-thumb]:appearance-none
-          [&::-webkit-slider-thumb]:w-3
-          [&::-webkit-slider-thumb]:h-3
-          [&::-webkit-slider-thumb]:bg-neutral-900
-          [&::-webkit-slider-thumb]:cursor-pointer"
-      />
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(clamp(parseInt(e.target.value)))}
+          className="w-full h-1 bg-neutral-200 rounded-none appearance-none cursor-pointer
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-3
+            [&::-webkit-slider-thumb]:h-3
+            [&::-webkit-slider-thumb]:bg-neutral-900
+            [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+        <input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          step={1}
+          onChange={(e) => onChange(clamp(parseInt(e.target.value)))}
+          className="w-24 px-2 py-1 text-xs bg-white border border-neutral-300 text-neutral-900
+            focus:outline-none focus:border-neutral-900"
+        />
+      </div>
     </div>
   )
 }
@@ -2202,23 +2395,7 @@ export default function Settings() {
     saturday: { enabled: false, slots: [] },
     sunday: { enabled: false, slots: [] }
   })
-  const [style, setStyle] = useState<StyleConfig>({
-    themeMode: 'dark',
-    centerText: '此计算机因违规外联已被阻断',
-    subText: '请等待安全部门与你联系',
-    bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
-    bottomRightText: '',
-    backgroundColor: '#0066cc',
-    textColor: '#ffffff',
-    lightBackgroundColor: '#fafafa',
-    lightTextColor: '#171717',
-    timePosition: 'hidden',
-    timeFormat: 'HH:mm:ss',
-    closeScreenPrompt: '请关闭投影设备后继续',
-    fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
-    textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
-    fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
-  })
+  const [style, setStyle] = useState<StyleConfig>(getDefaultStyleConfig())
   const [language, setLanguage] = useState<AppLanguage>('zh-CN')
   const [selectedCamera, setSelectedCamera] = useState<string | undefined>(undefined)
   const [startup, setStartup] = useState<StartupConfig>({ autoLaunch: true })
@@ -2234,12 +2411,118 @@ export default function Settings() {
     message: '等待检查更新'
   })
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
-  const [showFullPreview, setShowFullPreview] = useState(false)
+  const [showAdvancedStyle, setShowAdvancedStyle] = useState(false)
   const [previewNow, setPreviewNow] = useState<Date>(new Date())
   const [selectedDay, setSelectedDay] = useState<keyof WeeklySchedule>('monday')
   const [previewMode, setPreviewMode] = useState<'dark' | 'light'>('dark')
+  const leftImageInputRef = useRef<HTMLInputElement>(null)
+  const rightImageInputRef = useRef<HTMLInputElement>(null)
+  const [styleError, setStyleError] = useState('')
+  const [cropState, setCropState] = useState<{
+    side: 'left' | 'right'
+    source: string
+    naturalWidth: number
+    naturalHeight: number
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
+  const cropContainerRef = useRef<HTMLDivElement>(null)
+  const [cropViewport, setCropViewport] = useState<{
+    left: number
+    top: number
+    width: number
+    height: number
+  } | null>(null)
+  const [cropInteraction, setCropInteraction] = useState<
+    | {
+        type: 'move' | 'resize'
+        handle?: 'nw' | 'ne' | 'sw' | 'se'
+        startX: number
+        startY: number
+        rect: { x: number; y: number; width: number; height: number }
+      }
+    | null
+  >(null)
+
+  const clampCropRect = (rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): {
+    x: number
+    y: number
+    width: number
+    height: number
+  } => {
+    const width = Math.max(1, Math.min(100, rect.width))
+    const height = Math.max(1, Math.min(100, rect.height))
+    const x = Math.max(0, Math.min(100 - width, rect.x))
+    const y = Math.max(0, Math.min(100 - height, rect.y))
+    return { x, y, width, height }
+  }
+
+  const getCropViewport = (
+    containerWidth: number,
+    containerHeight: number,
+    naturalWidth: number,
+    naturalHeight: number
+  ) => {
+    if (containerWidth <= 0 || containerHeight <= 0 || naturalWidth <= 0 || naturalHeight <= 0) {
+      return { left: 0, top: 0, width: containerWidth, height: containerHeight }
+    }
+
+    const containerRatio = containerWidth / containerHeight
+    const imageRatio = naturalWidth / naturalHeight
+
+    if (imageRatio > containerRatio) {
+      const width = containerWidth
+      const height = width / imageRatio
+      return {
+        left: 0,
+        top: (containerHeight - height) / 2,
+        width,
+        height
+      }
+    }
+
+    const height = containerHeight
+    const width = height * imageRatio
+    return {
+      left: (containerWidth - width) / 2,
+      top: 0,
+      width,
+      height
+    }
+  }
 
   const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+  useEffect(() => {
+    if (!cropState || !cropContainerRef.current) {
+      setCropViewport(null)
+      return
+    }
+
+    const updateViewport = () => {
+      const rect = cropContainerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setCropViewport(
+        getCropViewport(rect.width, rect.height, cropState.naturalWidth, cropState.naturalHeight)
+      )
+    }
+
+    updateViewport()
+    const observer = new ResizeObserver(() => updateViewport())
+    observer.observe(cropContainerRef.current)
+    window.addEventListener('resize', updateViewport)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateViewport)
+    }
+  }, [cropState])
 
   const getCurrentSettingsState = (): SavedSettingsState => ({
     password,
@@ -2273,54 +2556,7 @@ export default function Settings() {
         saturday: { enabled: false, slots: [] },
         sunday: { enabled: false, slots: [] }
       }
-      const nextStyle: StyleConfig = config.style
-        ? {
-            themeMode: config.style.themeMode || 'dark',
-            centerText: config.style.centerText || '',
-            subText: config.style.subText || '',
-            bottomLeftText: config.style.bottomLeftText || '',
-            bottomRightText: config.style.bottomRightText || '',
-            backgroundColor: config.style.backgroundColor || '#171717',
-            textColor: config.style.textColor || '#e5e5e5',
-            lightBackgroundColor: config.style.lightBackgroundColor || '#fafafa',
-            lightTextColor: config.style.lightTextColor || '#171717',
-            timePosition: config.style.timePosition || 'hidden',
-            timeFormat: config.style.timeFormat || 'HH:mm:ss',
-            closeScreenPrompt: config.style.closeScreenPrompt || '请关闭投影设备后继续',
-            fontSizes: config.style.fontSizes || {
-              centerText: 48,
-              subText: 24,
-              bottomText: 14,
-              timeText: 18
-            },
-            textAligns: config.style.textAligns || {
-              centerText: 'center',
-              subText: 'center',
-              bottomText: 'center'
-            },
-            fontWeights: config.style.fontWeights || {
-              centerText: 'medium',
-              subText: 'normal',
-              bottomText: 'normal'
-            }
-          }
-        : {
-            themeMode: 'dark',
-            centerText: '此计算机因违规外联已被阻断',
-            subText: '请等待安全部门与你联系',
-            bottomLeftText: '保密委员会办公室\n意识形态工作领导小组办公室',
-            bottomRightText: '',
-            backgroundColor: '#0066cc',
-            textColor: '#ffffff',
-            lightBackgroundColor: '#fafafa',
-            lightTextColor: '#171717',
-            timePosition: 'hidden',
-            timeFormat: 'HH:mm:ss',
-            closeScreenPrompt: '请关闭投影设备后继续',
-            fontSizes: { centerText: 48, subText: 24, bottomText: 14, timeText: 18 },
-            textAligns: { centerText: 'center', subText: 'center', bottomText: 'center' },
-            fontWeights: { centerText: 'medium', subText: 'normal', bottomText: 'normal' }
-          }
+      const nextStyle: StyleConfig = normalizeStyleConfig(config.style)
       const nextSelectedCamera = config.selectedCamera ?? null
       const nextLanguage = normalizeLanguage(config.language)
       const nextStartup: StartupConfig = config.startup || { autoLaunch: true }
@@ -2453,43 +2689,6 @@ export default function Settings() {
     }
   }
 
-  const formatPreviewTime = (date: Date, format: string): string => {
-    const locale = getLocaleForDate(language)
-    if (format === 'YYYY-MM-DD HH:mm') {
-      const d = date.toLocaleDateString(locale)
-      const time = date.toLocaleTimeString(locale, {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-      return `${d} ${time}`
-    }
-
-    if (format === 'HH:mm') {
-      return date.toLocaleTimeString(locale, { hour12: false, hour: '2-digit', minute: '2-digit' })
-    }
-
-    if (format === 'hh:mm A') {
-      return date.toLocaleTimeString(locale, { hour12: true, hour: '2-digit', minute: '2-digit' })
-    }
-
-    if (format === 'hh:mm:ss A') {
-      return date.toLocaleTimeString(locale, {
-        hour12: true,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      })
-    }
-
-    return date.toLocaleTimeString(locale, {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }
-
   const handleTabChange = (nextTab: SettingsTab) => {
     if (nextTab === activeTab) return
     if (!hasUnsavedChanges) {
@@ -2538,6 +2737,221 @@ export default function Settings() {
     }))
   }
 
+  const loadImageMeta = async (source: string): Promise<{ width: number; height: number }> => {
+    return await new Promise((resolve, reject) => {
+      const img = new window.Image()
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+      img.onerror = () => reject(new Error('image-load-failed'))
+      img.src = source
+    })
+  }
+
+  const openCropper = async (side: 'left' | 'right', source: string) => {
+    try {
+      const meta = await loadImageMeta(source)
+      const initialRect = clampCropRect({
+        x: 5,
+        y: 5,
+        width: 90,
+        height: 90
+      })
+      setCropState({
+        side,
+        source,
+        naturalWidth: meta.width,
+        naturalHeight: meta.height,
+        x: initialRect.x,
+        y: initialRect.y,
+        width: initialRect.width,
+        height: initialRect.height
+      })
+    } catch {
+      setStyleError(
+        lt(language, {
+          'zh-CN': '图片加载失败，请重试',
+          'en-US': 'Failed to load image. Please retry.',
+          'ja-JP': '画像の読み込みに失敗しました。再試行してください。',
+          'ko-KR': '이미지 로드에 실패했습니다. 다시 시도하세요.'
+        })
+      )
+    }
+  }
+
+  const handleImageUpload = async (side: 'left' | 'right', file?: File) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setStyleError(
+        lt(language, {
+          'zh-CN': '请选择图片文件',
+          'en-US': 'Please select an image file.',
+          'ja-JP': '画像ファイルを選択してください。',
+          'ko-KR': '이미지 파일을 선택하세요.'
+        })
+      )
+      return
+    }
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result || ''))
+        reader.onerror = () => reject(new Error('read-failed'))
+        reader.readAsDataURL(file)
+      })
+      setStyleError('')
+      await openCropper(side, dataUrl)
+    } catch {
+      setStyleError(
+        lt(language, {
+          'zh-CN': '读取图片失败，请重试',
+          'en-US': 'Failed to read image. Please retry.',
+          'ja-JP': '画像の読み取りに失敗しました。再試行してください。',
+          'ko-KR': '이미지 읽기에 실패했습니다. 다시 시도하세요.'
+        })
+      )
+    }
+  }
+
+  const applyCrop = async () => {
+    if (!cropState) return
+    const img = new window.Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('crop-image-load-failed'))
+      img.src = cropState.source
+    })
+
+    const normalizedRect = clampCropRect(cropState)
+    const sx = Math.max(0, Math.round((normalizedRect.x / 100) * cropState.naturalWidth))
+    const sy = Math.max(0, Math.round((normalizedRect.y / 100) * cropState.naturalHeight))
+    const sw = Math.max(1, Math.round((normalizedRect.width / 100) * cropState.naturalWidth))
+    const sh = Math.max(1, Math.round((normalizedRect.height / 100) * cropState.naturalHeight))
+    const safeSx = Math.min(sx, Math.max(0, cropState.naturalWidth - 1))
+    const safeSy = Math.min(sy, Math.max(0, cropState.naturalHeight - 1))
+    const safeSw = Math.max(1, Math.min(sw, cropState.naturalWidth - safeSx))
+    const safeSh = Math.max(1, Math.min(sh, cropState.naturalHeight - safeSy))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, safeSw)
+    canvas.height = Math.max(1, safeSh)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(img, safeSx, safeSy, safeSw, safeSh, 0, 0, safeSw, safeSh)
+
+    const croppedData = canvas.toDataURL('image/png')
+    setStyle((prev) => {
+      if (cropState.side === 'left') {
+        return {
+          ...prev,
+          bottomLeftMode: 'image',
+          bottomLeftImage: croppedData
+        }
+      }
+      return {
+        ...prev,
+        bottomRightMode: 'image',
+        bottomRightImage: croppedData
+      }
+    })
+    setCropState(null)
+  }
+
+  const startMoveCrop = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cropState) return
+    e.preventDefault()
+    setCropInteraction({
+      type: 'move',
+      startX: e.clientX,
+      startY: e.clientY,
+      rect: {
+        x: cropState.x,
+        y: cropState.y,
+        width: cropState.width,
+        height: cropState.height
+      }
+    })
+  }
+
+  const startResizeCrop = (
+    e: React.MouseEvent<HTMLDivElement>,
+    handle: 'nw' | 'ne' | 'sw' | 'se'
+  ) => {
+    if (!cropState) return
+    e.preventDefault()
+    e.stopPropagation()
+    setCropInteraction({
+      type: 'resize',
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      rect: {
+        x: cropState.x,
+        y: cropState.y,
+        width: cropState.width,
+        height: cropState.height
+      }
+    })
+  }
+
+  const handleCropMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cropState || !cropContainerRef.current || !cropInteraction || !cropViewport) return
+    if (cropViewport.width <= 0 || cropViewport.height <= 0) return
+
+    const deltaX = ((e.clientX - cropInteraction.startX) / cropViewport.width) * 100
+    const deltaY = ((e.clientY - cropInteraction.startY) / cropViewport.height) * 100
+
+    if (cropInteraction.type === 'move') {
+      const next = clampCropRect({
+        x: cropInteraction.rect.x + deltaX,
+        y: cropInteraction.rect.y + deltaY,
+        width: cropInteraction.rect.width,
+        height: cropInteraction.rect.height
+      })
+      setCropState((prev) => (prev ? { ...prev, ...next } : prev))
+      return
+    }
+
+    let nextRect = { ...cropInteraction.rect }
+    if (cropInteraction.handle === 'nw') {
+      nextRect = {
+        x: cropInteraction.rect.x + deltaX,
+        y: cropInteraction.rect.y + deltaY,
+        width: cropInteraction.rect.width - deltaX,
+        height: cropInteraction.rect.height - deltaY
+      }
+    } else if (cropInteraction.handle === 'ne') {
+      nextRect = {
+        x: cropInteraction.rect.x,
+        y: cropInteraction.rect.y + deltaY,
+        width: cropInteraction.rect.width + deltaX,
+        height: cropInteraction.rect.height - deltaY
+      }
+    } else if (cropInteraction.handle === 'sw') {
+      nextRect = {
+        x: cropInteraction.rect.x + deltaX,
+        y: cropInteraction.rect.y,
+        width: cropInteraction.rect.width - deltaX,
+        height: cropInteraction.rect.height + deltaY
+      }
+    } else if (cropInteraction.handle === 'se') {
+      nextRect = {
+        x: cropInteraction.rect.x,
+        y: cropInteraction.rect.y,
+        width: cropInteraction.rect.width + deltaX,
+        height: cropInteraction.rect.height + deltaY
+      }
+    }
+
+    const next = clampCropRect(nextRect)
+    setCropState((prev) => (prev ? { ...prev, ...next } : prev))
+  }
+
+  const handleCropMouseUp = () => {
+    setCropInteraction(null)
+  }
+
   const updateDaySchedule = (day: keyof WeeklySchedule, updates: Partial<DaySchedule>) => {
     setSchedule((prev) => ({ ...prev, [day]: { ...prev[day], ...updates } }))
   }
@@ -2570,18 +2984,7 @@ export default function Settings() {
   }
 
   const previewColors = getPreviewColors()
-  const previewTimeText = formatPreviewTime(previewNow, style.timeFormat)
   const canControlAutoLaunch = runtimeInfo ? runtimeInfo.autoLaunchSupported : true
-  const previewTimePositionClass =
-    style.timePosition === 'top-left'
-      ? 'top-4 left-4'
-      : style.timePosition === 'top-right'
-        ? 'top-4 right-4'
-        : style.timePosition === 'bottom-left'
-          ? 'bottom-4 left-4'
-          : style.timePosition === 'bottom-right'
-            ? 'bottom-4 right-4'
-            : ''
 
   const navItems: { id: typeof activeTab; label: string; icon: React.ElementType }[] = [
     { id: 'schedule', label: t(language, 'settings.tab.schedule'), icon: Calendar },
@@ -2603,6 +3006,16 @@ export default function Settings() {
   const timeFormatOptions = getTimeFormatOptions(language)
   const textAlignOptions = getTextAlignOptions(language)
   const fontWeightOptions = getFontWeightOptions(language)
+
+  const cropBoxGeometry =
+    cropState && cropViewport
+      ? {
+          left: cropViewport.left + (cropState.x / 100) * cropViewport.width,
+          top: cropViewport.top + (cropState.y / 100) * cropViewport.height,
+          width: (cropState.width / 100) * cropViewport.width,
+          height: (cropState.height / 100) * cropViewport.height
+        }
+      : null
 
   return (
     <div className="h-screen bg-neutral-50 flex flex-col font-sans text-neutral-900 overflow-hidden">
@@ -2853,6 +3266,209 @@ export default function Settings() {
 
                 <Card
                   title={lt(language, {
+                    'zh-CN': '文字透明度',
+                    'en-US': 'Text Opacity',
+                    'ja-JP': '文字の透明度',
+                    'ko-KR': '텍스트 투명도'
+                  })}
+                >
+                  <div className="space-y-3">
+                    <div className="border border-neutral-200 p-3 space-y-2">
+                      <Slider
+                        label={lt(language, {
+                          'zh-CN': '标题透明度',
+                          'en-US': 'Title Opacity',
+                          'ja-JP': 'タイトル透明度',
+                          'ko-KR': '제목 투명도'
+                        })}
+                        value={style.textOpacities?.centerText ?? style.textOpacity}
+                        min={0}
+                        max={100}
+                        unit="%"
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: v,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: getDefaultStyleConfig().textOpacities?.centerText || 100,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      >
+                        {lt(language, {
+                          'zh-CN': '还原标题透明度',
+                          'en-US': 'Reset Title Opacity',
+                          'ja-JP': 'タイトル透明度をリセット',
+                          'ko-KR': '제목 투명도 초기화'
+                        })}
+                      </Button>
+                    </div>
+
+                    <div className="border border-neutral-200 p-3 space-y-2">
+                      <Slider
+                        label={lt(language, {
+                          'zh-CN': '副标题透明度',
+                          'en-US': 'Subtitle Opacity',
+                          'ja-JP': 'サブタイトル透明度',
+                          'ko-KR': '부제목 투명도'
+                        })}
+                        value={style.textOpacities?.subText ?? style.textOpacity}
+                        min={0}
+                        max={100}
+                        unit="%"
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: v,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: getDefaultStyleConfig().textOpacities?.subText || 100,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      >
+                        {lt(language, {
+                          'zh-CN': '还原副标题透明度',
+                          'en-US': 'Reset Subtitle Opacity',
+                          'ja-JP': 'サブタイトル透明度をリセット',
+                          'ko-KR': '부제목 투명도 초기화'
+                        })}
+                      </Button>
+                    </div>
+
+                    <div className="border border-neutral-200 p-3 space-y-2">
+                      <Slider
+                        label={lt(language, {
+                          'zh-CN': '左下文字透明度',
+                          'en-US': 'Bottom Left Text Opacity',
+                          'ja-JP': '左下テキスト透明度',
+                          'ko-KR': '좌하단 텍스트 투명도'
+                        })}
+                        value={style.textOpacities?.bottomLeftText ?? style.textOpacity}
+                        min={0}
+                        max={100}
+                        unit="%"
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: v,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: getDefaultStyleConfig().textOpacities?.bottomLeftText || 100,
+                              bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
+                            }
+                          }))
+                        }
+                      >
+                        {lt(language, {
+                          'zh-CN': '还原左下透明度',
+                          'en-US': 'Reset Bottom Left Opacity',
+                          'ja-JP': '左下透明度をリセット',
+                          'ko-KR': '좌하단 투명도 초기화'
+                        })}
+                      </Button>
+                    </div>
+
+                    <div className="border border-neutral-200 p-3 space-y-2">
+                      <Slider
+                        label={lt(language, {
+                          'zh-CN': '右下文字透明度',
+                          'en-US': 'Bottom Right Text Opacity',
+                          'ja-JP': '右下テキスト透明度',
+                          'ko-KR': '우하단 텍스트 투명도'
+                        })}
+                        value={style.textOpacities?.bottomRightText ?? style.textOpacity}
+                        min={0}
+                        max={100}
+                        unit="%"
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: v
+                            }
+                          }))
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setStyle((s) => ({
+                            ...s,
+                            textOpacities: {
+                              centerText: s.textOpacities?.centerText ?? s.textOpacity,
+                              subText: s.textOpacities?.subText ?? s.textOpacity,
+                              bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
+                              bottomRightText: getDefaultStyleConfig().textOpacities?.bottomRightText || 100
+                            }
+                          }))
+                        }
+                      >
+                        {lt(language, {
+                          'zh-CN': '还原右下透明度',
+                          'en-US': 'Reset Bottom Right Opacity',
+                          'ja-JP': '右下透明度をリセット',
+                          'ko-KR': '우하단 투명도 초기화'
+                        })}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card
+                  title={lt(language, {
                     'zh-CN': '主题模式',
                     'en-US': 'Theme Mode',
                     'ja-JP': 'テーマモード',
@@ -3000,8 +3616,8 @@ export default function Settings() {
                         'ko-KR': '메인 제목'
                       })}
                       value={style.fontSizes.centerText}
-                      min={20}
-                      max={80}
+                      min={8}
+                      max={300}
                       onChange={(v) =>
                         setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, centerText: v } }))
                       }
@@ -3014,8 +3630,8 @@ export default function Settings() {
                         'ko-KR': '부제목'
                       })}
                       value={style.fontSizes.subText}
-                      min={16}
-                      max={48}
+                      min={8}
+                      max={240}
                       onChange={(v) =>
                         setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, subText: v } }))
                       }
@@ -3028,8 +3644,8 @@ export default function Settings() {
                         'ko-KR': '하단 텍스트'
                       })}
                       value={style.fontSizes.bottomText}
-                      min={10}
-                      max={32}
+                      min={6}
+                      max={200}
                       onChange={(v) =>
                         setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, bottomText: v } }))
                       }
@@ -3042,8 +3658,8 @@ export default function Settings() {
                         'ko-KR': '시간 텍스트'
                       })}
                       value={style.fontSizes.timeText}
-                      min={12}
-                      max={40}
+                      min={6}
+                      max={200}
                       onChange={(v) =>
                         setStyle((s) => ({ ...s, fontSizes: { ...s.fontSizes, timeText: v } }))
                       }
@@ -3166,7 +3782,51 @@ export default function Settings() {
                             ...s,
                             textAligns: {
                               ...s.textAligns,
-                              bottomText: v as TextAlignConfig['bottomText']
+                              bottomText: v as TextAlignConfig['bottomText'],
+                              bottomLeftText: v as TextAlignConfig['bottomLeftText'],
+                              bottomRightText: v as TextAlignConfig['bottomRightText']
+                            }
+                          }))
+                        }
+                        options={textAlignOptions}
+                      />
+                      <label className="block text-xs text-neutral-600">
+                        {lt(language, {
+                          'zh-CN': '左下文字对齐',
+                          'en-US': 'Bottom Left Align',
+                          'ja-JP': '左下テキスト配置',
+                          'ko-KR': '좌하단 텍스트 정렬'
+                        })}
+                      </label>
+                      <Select
+                        value={style.textAligns.bottomLeftText}
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textAligns: {
+                              ...s.textAligns,
+                              bottomLeftText: v as TextAlignConfig['bottomLeftText']
+                            }
+                          }))
+                        }
+                        options={textAlignOptions}
+                      />
+                      <label className="block text-xs text-neutral-600">
+                        {lt(language, {
+                          'zh-CN': '右下文字对齐',
+                          'en-US': 'Bottom Right Align',
+                          'ja-JP': '右下テキスト配置',
+                          'ko-KR': '우하단 텍스트 정렬'
+                        })}
+                      </label>
+                      <Select
+                        value={style.textAligns.bottomRightText}
+                        onChange={(v) =>
+                          setStyle((s) => ({
+                            ...s,
+                            textAligns: {
+                              ...s.textAligns,
+                              bottomRightText: v as TextAlignConfig['bottomRightText']
                             }
                           }))
                         }
@@ -3249,14 +3909,33 @@ export default function Settings() {
                 >
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs text-neutral-600 mb-1.5">
-                        {lt(language, {
-                          'zh-CN': '主标题',
-                          'en-US': 'Main Title',
-                          'ja-JP': 'メイン見出し',
-                          'ko-KR': '메인 제목'
-                        })}
-                      </label>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="block text-xs text-neutral-600">
+                          {lt(language, {
+                            'zh-CN': '主标题',
+                            'en-US': 'Main Title',
+                            'ja-JP': 'メイン見出し',
+                            'ko-KR': '메인 제목'
+                          })}
+                        </label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setStyle((s) => ({
+                              ...s,
+                              centerText: getDefaultStyleConfig().centerText
+                            }))
+                          }
+                        >
+                          {lt(language, {
+                            'zh-CN': '还原此项',
+                            'en-US': 'Reset This',
+                            'ja-JP': 'この項目をリセット',
+                            'ko-KR': '이 항목 초기화'
+                          })}
+                        </Button>
+                      </div>
                       <TextArea
                         value={style.centerText}
                         onChange={(v) => setStyle((s) => ({ ...s, centerText: v }))}
@@ -3269,14 +3948,33 @@ export default function Settings() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-neutral-600 mb-1.5">
-                        {lt(language, {
-                          'zh-CN': '副标题',
-                          'en-US': 'Subtitle',
-                          'ja-JP': 'サブタイトル',
-                          'ko-KR': '부제목'
-                        })}
-                      </label>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="block text-xs text-neutral-600">
+                          {lt(language, {
+                            'zh-CN': '副标题',
+                            'en-US': 'Subtitle',
+                            'ja-JP': 'サブタイトル',
+                            'ko-KR': '부제목'
+                          })}
+                        </label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setStyle((s) => ({
+                              ...s,
+                              subText: getDefaultStyleConfig().subText
+                            }))
+                          }
+                        >
+                          {lt(language, {
+                            'zh-CN': '还原此项',
+                            'en-US': 'Reset This',
+                            'ja-JP': 'この項目をリセット',
+                            'ko-KR': '이 항목 초기화'
+                          })}
+                        </Button>
+                      </div>
                       <TextArea
                         value={style.subText}
                         onChange={(v) => setStyle((s) => ({ ...s, subText: v }))}
@@ -3290,36 +3988,330 @@ export default function Settings() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs text-neutral-600 mb-1.5">
-                          {lt(language, {
-                            'zh-CN': '左下角',
-                            'en-US': 'Bottom Left',
-                            'ja-JP': '左下',
-                            'ko-KR': '좌하단'
-                          })}
-                        </label>
-                        <TextArea
-                          value={style.bottomLeftText}
-                          onChange={(v) => setStyle((s) => ({ ...s, bottomLeftText: v }))}
-                          rows={1}
-                        />
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '左下角',
+                              'en-US': 'Bottom Left',
+                              'ja-JP': '左下',
+                              'ko-KR': '좌하단'
+                            })}
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                bottomLeftMode: getDefaultStyleConfig().bottomLeftMode,
+                                bottomLeftText: getDefaultStyleConfig().bottomLeftText,
+                                bottomLeftImage: getDefaultStyleConfig().bottomLeftImage,
+                                imageScales: {
+                                  bottomLeft: getDefaultStyleConfig().imageScales?.bottomLeft || 100,
+                                  bottomRight: s.imageScales?.bottomRight || 100
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原左下',
+                              'en-US': 'Reset Left',
+                              'ja-JP': '左下をリセット',
+                              'ko-KR': '좌하단 초기화'
+                            })}
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <Select
+                            value={style.bottomLeftMode}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                bottomLeftMode: v as CornerContentMode
+                              }))
+                            }
+                            options={[
+                              {
+                                value: 'text',
+                                label: lt(language, {
+                                  'zh-CN': '文字',
+                                  'en-US': 'Text',
+                                  'ja-JP': 'テキスト',
+                                  'ko-KR': '텍스트'
+                                })
+                              },
+                              {
+                                value: 'image',
+                                label: lt(language, {
+                                  'zh-CN': '图片',
+                                  'en-US': 'Image',
+                                  'ja-JP': '画像',
+                                  'ko-KR': '이미지'
+                                })
+                              }
+                            ]}
+                          />
+
+                          {style.bottomLeftMode === 'text' ? (
+                            <TextArea
+                              value={style.bottomLeftText}
+                              onChange={(v) => setStyle((s) => ({ ...s, bottomLeftText: v }))}
+                              rows={1}
+                            />
+                          ) : (
+                            <div className="space-y-2">
+                              <input
+                                ref={leftImageInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  void handleImageUpload('left', e.target.files?.[0])
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                              <div className="flex gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => leftImageInputRef.current?.click()}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '上传图片',
+                                    'en-US': 'Upload Image',
+                                    'ja-JP': '画像をアップロード',
+                                    'ko-KR': '이미지 업로드'
+                                  })}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() =>
+                                    style.bottomLeftImage && void openCropper('left', style.bottomLeftImage)
+                                  }
+                                  disabled={!style.bottomLeftImage}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '重新裁切',
+                                    'en-US': 'Re-crop',
+                                    'ja-JP': '再クロップ',
+                                    'ko-KR': '다시 자르기'
+                                  })}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setStyle((s) => ({ ...s, bottomLeftImage: '' }))}
+                                  disabled={!style.bottomLeftImage}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '清空',
+                                    'en-US': 'Clear',
+                                    'ja-JP': 'クリア',
+                                    'ko-KR': '지우기'
+                                  })}
+                                </Button>
+                              </div>
+                              {style.bottomLeftImage && (
+                                <div className="border border-neutral-200 bg-neutral-50 p-2">
+                                  <img
+                                    src={style.bottomLeftImage}
+                                    alt="bottom-left-preview"
+                                    className="max-h-24 max-w-full object-contain"
+                                  />
+                                </div>
+                              )}
+                              <Slider
+                                label={lt(language, {
+                                  'zh-CN': '左下图片缩放',
+                                  'en-US': 'Bottom Left Image Scale',
+                                  'ja-JP': '左下画像の拡大率',
+                                  'ko-KR': '좌하단 이미지 배율'
+                                })}
+                                value={Math.round(style.imageScales?.bottomLeft || 100)}
+                                min={10}
+                                max={300}
+                                unit="%"
+                                onChange={(v) =>
+                                  setStyle((s) => ({
+                                    ...s,
+                                    imageScales: {
+                                      bottomLeft: v,
+                                      bottomRight: s.imageScales?.bottomRight || 100
+                                    }
+                                  }))
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-xs text-neutral-600 mb-1.5">
-                          {lt(language, {
-                            'zh-CN': '右下角',
-                            'en-US': 'Bottom Right',
-                            'ja-JP': '右下',
-                            'ko-KR': '우하단'
-                          })}
-                        </label>
-                        <TextArea
-                          value={style.bottomRightText}
-                          onChange={(v) => setStyle((s) => ({ ...s, bottomRightText: v }))}
-                          rows={1}
-                        />
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <label className="block text-xs text-neutral-600">
+                            {lt(language, {
+                              'zh-CN': '右下角',
+                              'en-US': 'Bottom Right',
+                              'ja-JP': '右下',
+                              'ko-KR': '우하단'
+                            })}
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setStyle((s) => ({
+                                ...s,
+                                bottomRightMode: getDefaultStyleConfig().bottomRightMode,
+                                bottomRightText: getDefaultStyleConfig().bottomRightText,
+                                bottomRightImage: getDefaultStyleConfig().bottomRightImage,
+                                imageScales: {
+                                  bottomLeft: s.imageScales?.bottomLeft || 100,
+                                  bottomRight: getDefaultStyleConfig().imageScales?.bottomRight || 100
+                                }
+                              }))
+                            }
+                          >
+                            {lt(language, {
+                              'zh-CN': '还原右下',
+                              'en-US': 'Reset Right',
+                              'ja-JP': '右下をリセット',
+                              'ko-KR': '우하단 초기화'
+                            })}
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <Select
+                            value={style.bottomRightMode}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                bottomRightMode: v as CornerContentMode
+                              }))
+                            }
+                            options={[
+                              {
+                                value: 'text',
+                                label: lt(language, {
+                                  'zh-CN': '文字',
+                                  'en-US': 'Text',
+                                  'ja-JP': 'テキスト',
+                                  'ko-KR': '텍스트'
+                                })
+                              },
+                              {
+                                value: 'image',
+                                label: lt(language, {
+                                  'zh-CN': '图片',
+                                  'en-US': 'Image',
+                                  'ja-JP': '画像',
+                                  'ko-KR': '이미지'
+                                })
+                              }
+                            ]}
+                          />
+
+                          {style.bottomRightMode === 'text' ? (
+                            <TextArea
+                              value={style.bottomRightText}
+                              onChange={(v) => setStyle((s) => ({ ...s, bottomRightText: v }))}
+                              rows={1}
+                            />
+                          ) : (
+                            <div className="space-y-2">
+                              <input
+                                ref={rightImageInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  void handleImageUpload('right', e.target.files?.[0])
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                              <div className="flex gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => rightImageInputRef.current?.click()}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '上传图片',
+                                    'en-US': 'Upload Image',
+                                    'ja-JP': '画像をアップロード',
+                                    'ko-KR': '이미지 업로드'
+                                  })}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() =>
+                                    style.bottomRightImage &&
+                                    void openCropper('right', style.bottomRightImage)
+                                  }
+                                  disabled={!style.bottomRightImage}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '重新裁切',
+                                    'en-US': 'Re-crop',
+                                    'ja-JP': '再クロップ',
+                                    'ko-KR': '다시 자르기'
+                                  })}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setStyle((s) => ({ ...s, bottomRightImage: '' }))}
+                                  disabled={!style.bottomRightImage}
+                                >
+                                  {lt(language, {
+                                    'zh-CN': '清空',
+                                    'en-US': 'Clear',
+                                    'ja-JP': 'クリア',
+                                    'ko-KR': '지우기'
+                                  })}
+                                </Button>
+                              </div>
+                              {style.bottomRightImage && (
+                                <div className="border border-neutral-200 bg-neutral-50 p-2">
+                                  <img
+                                    src={style.bottomRightImage}
+                                    alt="bottom-right-preview"
+                                    className="max-h-24 max-w-full object-contain ml-auto"
+                                  />
+                                </div>
+                              )}
+                              <Slider
+                                label={lt(language, {
+                                  'zh-CN': '右下图片缩放',
+                                  'en-US': 'Bottom Right Image Scale',
+                                  'ja-JP': '右下画像の拡大率',
+                                  'ko-KR': '우하단 이미지 배율'
+                                })}
+                                value={Math.round(style.imageScales?.bottomRight || 100)}
+                                min={10}
+                                max={300}
+                                unit="%"
+                                onChange={(v) =>
+                                  setStyle((s) => ({
+                                    ...s,
+                                    imageScales: {
+                                      bottomLeft: s.imageScales?.bottomLeft || 100,
+                                      bottomRight: v
+                                    }
+                                  }))
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    {styleError && (
+                      <div className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2">
+                        {styleError}
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs text-neutral-600 mb-1.5">
                         {lt(language, {
@@ -3385,7 +4377,16 @@ export default function Settings() {
                         'ko-KR': '라이트'
                       })}
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={() => setShowFullPreview(true)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        void window.api.openPreviewWindow({
+                          style,
+                          mode: previewMode
+                        })
+                      }
+                    >
                       {lt(language, {
                         'zh-CN': '全屏仿真预览',
                         'en-US': 'Fullscreen Simulation',
@@ -3403,101 +4404,275 @@ export default function Settings() {
                         'ko-KR': 'Lock It 미리보기'
                       })}
                     </div>
-                    <div
-                      className="aspect-video relative px-6 py-5"
-                      style={{
-                        backgroundColor: previewColors.backgroundColor,
-                        color: previewColors.textColor
-                      }}
-                    >
-                      {style.timePosition !== 'hidden' && style.timePosition !== 'center' && (
-                        <div
-                          className={`absolute font-mono opacity-75 ${previewTimePositionClass}`}
-                          style={{ fontSize: Math.max(10, Math.min(style.fontSizes.timeText, 20)) }}
-                        >
-                          {previewTimeText}
-                        </div>
-                      )}
-
-                      <div className="h-full flex flex-col justify-center">
-                        {style.timePosition === 'center' && (
-                          <div
-                            className="font-mono mb-3 opacity-70"
-                            style={{
-                              fontSize: Math.max(10, Math.min(style.fontSizes.timeText, 22)),
-                              textAlign: 'center'
-                            }}
-                          >
-                            {previewTimeText}
-                          </div>
-                        )}
-                        <div
-                          className="whitespace-pre-line leading-tight"
-                          style={{
-                            fontSize: Math.max(14, Math.min(style.fontSizes.centerText, 34)),
-                            textAlign: style.textAligns.centerText,
-                            fontWeight: style.fontWeights.centerText
-                          }}
-                        >
-                          {style.centerText ||
-                            lt(language, {
-                              'zh-CN': '主标题',
-                              'en-US': 'Main Title',
-                              'ja-JP': 'メイン見出し',
-                              'ko-KR': '메인 제목'
-                            })}
-                        </div>
-                        <div
-                          className="opacity-85 whitespace-pre-line mt-2"
-                          style={{
-                            fontSize: Math.max(12, Math.min(style.fontSizes.subText, 22)),
-                            textAlign: style.textAligns.subText,
-                            fontWeight: style.fontWeights.subText
-                          }}
-                        >
-                          {style.subText ||
-                            lt(language, {
-                              'zh-CN': '副标题',
-                              'en-US': 'Subtitle',
-                              'ja-JP': 'サブタイトル',
-                              'ko-KR': '부제목'
-                            })}
-                        </div>
-                      </div>
-
-                      <div
-                        className="absolute bottom-4 left-4 right-4 grid grid-cols-2 gap-3 opacity-80"
-                        style={{
-                          fontSize: Math.max(10, Math.min(style.fontSizes.bottomText, 16)),
-                          fontWeight: style.fontWeights.bottomText
-                        }}
-                      >
-                        <span
-                          className="whitespace-pre-line"
-                          style={{ textAlign: style.textAligns.bottomText }}
-                        >
-                          {style.bottomLeftText ||
-                            lt(language, {
-                              'zh-CN': '左下角文字',
-                              'en-US': 'Bottom Left Text',
-                              'ja-JP': '左下テキスト',
-                              'ko-KR': '좌하단 텍스트'
-                            })}
-                        </span>
-                        <span
-                          className="whitespace-pre-line text-right"
-                          style={{ textAlign: style.textAligns.bottomText }}
-                        >
-                          {style.bottomRightText ||
-                            lt(language, {
-                              'zh-CN': '右下角文字',
-                              'en-US': 'Bottom Right Text',
-                              'ja-JP': '右下テキスト',
-                              'ko-KR': '우하단 텍스트'
-                            })}
-                        </span>
-                      </div>
+                    <div className="aspect-video relative" style={{ backgroundColor: previewColors.backgroundColor }}>
+                      <LockScreenView
+                        style={style}
+                        currentTime={previewNow}
+                        backgroundColor={previewColors.backgroundColor}
+                        textColor={previewColors.textColor}
+                        className="absolute inset-0"
+                      />
                     </div>
+                  </div>
+                </Card>
+
+                <Card
+                  title={lt(language, {
+                    'zh-CN': '高级设置',
+                    'en-US': 'Advanced',
+                    'ja-JP': '詳細設定',
+                    'ko-KR': '고급 설정'
+                  })}
+                  subtitle={lt(language, {
+                    'zh-CN': '默认折叠；展开后可配置宽度与各区域边距/偏移',
+                    'en-US': 'Collapsed by default. Expand for width and margin/offset tuning.',
+                    'ja-JP': '初期状態は折りたたみ。展開すると幅と余白/オフセットを調整できます。',
+                    'ko-KR': '기본은 접힘 상태이며, 펼치면 너비/여백/오프셋을 조정할 수 있습니다.'
+                  })}
+                >
+                  <div className="space-y-4">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowAdvancedStyle((v) => !v)}
+                    >
+                      {showAdvancedStyle
+                        ? lt(language, {
+                            'zh-CN': '收起高级设置',
+                            'en-US': 'Collapse Advanced',
+                            'ja-JP': '詳細設定を折りたたむ',
+                            'ko-KR': '고급 설정 접기'
+                          })
+                        : lt(language, {
+                            'zh-CN': '展开高级设置',
+                            'en-US': 'Expand Advanced',
+                            'ja-JP': '詳細設定を展開',
+                            'ko-KR': '고급 설정 펼치기'
+                          })}
+                    </Button>
+
+                    {showAdvancedStyle && (
+                      <>
+                        <div className="grid grid-cols-2 gap-6">
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '中央区域宽度',
+                              'en-US': 'Center Width',
+                              'ja-JP': '中央領域の幅',
+                              'ko-KR': '중앙 영역 너비'
+                            })}
+                            value={style.layout.centerWidth}
+                            min={40}
+                            max={100}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, centerWidth: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '中央区域 padding',
+                              'en-US': 'Center Padding',
+                              'ja-JP': '中央領域の余白',
+                              'ko-KR': '중앙 영역 패딩'
+                            })}
+                            value={style.layout.centerPadding}
+                            min={0}
+                            max={80}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, centerPadding: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '中央区域左右偏移',
+                              'en-US': 'Center Horizontal Offset',
+                              'ja-JP': '中央領域の左右オフセット',
+                              'ko-KR': '중앙 영역 좌우 오프셋'
+                            })}
+                            value={style.layout.centerOffsetX}
+                            min={-200}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, centerOffsetX: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '中央区域上下偏移',
+                              'en-US': 'Center Vertical Offset',
+                              'ja-JP': '中央領域の上下オフセット',
+                              'ko-KR': '중앙 영역 상하 오프셋'
+                            })}
+                            value={style.layout.centerOffsetY}
+                            min={-200}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, centerOffsetY: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '左下内容宽度',
+                              'en-US': 'Bottom Left Width',
+                              'ja-JP': '左下コンテンツ幅',
+                              'ko-KR': '좌하단 콘텐츠 너비'
+                            })}
+                            value={style.layout.bottomLeftWidth}
+                            min={10}
+                            max={90}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, bottomLeftWidth: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '左下内容 padding',
+                              'en-US': 'Bottom Left Padding',
+                              'ja-JP': '左下コンテンツ余白',
+                              'ko-KR': '좌하단 콘텐츠 패딩'
+                            })}
+                            value={style.layout.bottomLeftPadding}
+                            min={0}
+                            max={40}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                layout: { ...s.layout, bottomLeftPadding: v }
+                              }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '右下内容宽度',
+                              'en-US': 'Bottom Right Width',
+                              'ja-JP': '右下コンテンツ幅',
+                              'ko-KR': '우하단 콘텐츠 너비'
+                            })}
+                            value={style.layout.bottomRightWidth}
+                            min={10}
+                            max={90}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                layout: { ...s.layout, bottomRightWidth: v }
+                              }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '右下内容 padding',
+                              'en-US': 'Bottom Right Padding',
+                              'ja-JP': '右下コンテンツ余白',
+                              'ko-KR': '우하단 콘텐츠 패딩'
+                            })}
+                            value={style.layout.bottomRightPadding}
+                            min={0}
+                            max={40}
+                            onChange={(v) =>
+                              setStyle((s) => ({
+                                ...s,
+                                layout: { ...s.layout, bottomRightPadding: v }
+                              }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '底部左右边距',
+                              'en-US': 'Bottom Horizontal Margin',
+                              'ja-JP': '下部左右マージン',
+                              'ko-KR': '하단 좌우 여백'
+                            })}
+                            value={style.layout.bottomOffsetX}
+                            min={0}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, bottomOffsetX: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '底部下边距',
+                              'en-US': 'Bottom Vertical Margin',
+                              'ja-JP': '下部下マージン',
+                              'ko-KR': '하단 아래 여백'
+                            })}
+                            value={style.layout.bottomOffsetY}
+                            min={0}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, bottomOffsetY: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '时间左右偏移',
+                              'en-US': 'Time Horizontal Offset',
+                              'ja-JP': '時刻の左右オフセット',
+                              'ko-KR': '시간 좌우 오프셋'
+                            })}
+                            value={style.layout.timeOffsetX}
+                            min={-200}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, timeOffsetX: v } }))
+                            }
+                          />
+                          <Slider
+                            label={lt(language, {
+                              'zh-CN': '时间上下偏移',
+                              'en-US': 'Time Vertical Offset',
+                              'ja-JP': '時刻の上下オフセット',
+                              'ko-KR': '시간 상하 오프셋'
+                            })}
+                            value={style.layout.timeOffsetY}
+                            min={-200}
+                            max={200}
+                            onChange={(v) =>
+                              setStyle((s) => ({ ...s, layout: { ...s.layout, timeOffsetY: v } }))
+                            }
+                          />
+                        </div>
+
+                        <div className="border border-neutral-200 bg-neutral-50 p-3">
+                          <div className="text-xs text-neutral-600 mb-2">
+                            {lt(language, {
+                              'zh-CN': '布局示意',
+                              'en-US': 'Layout Sketch',
+                              'ja-JP': 'レイアウト図',
+                              'ko-KR': '레이아웃 스케치'
+                            })}
+                          </div>
+                          <div className="h-28 border border-neutral-300 bg-white relative overflow-hidden">
+                            <div
+                              className="absolute left-1/2 top-3 -translate-x-1/2 h-8 border border-neutral-700/70 bg-neutral-900/10"
+                              style={{
+                                width: `${style.layout.centerWidth * 0.75}%`,
+                                padding: style.layout.centerPadding / 4,
+                                transform: `translate(${style.layout.centerOffsetX / 8}px, ${style.layout.centerOffsetY / 8}px)`
+                              }}
+                            />
+                            <div className="absolute left-2 right-2 bottom-2 flex items-end justify-between">
+                              <div
+                                className="h-6 border border-neutral-700/70 bg-neutral-900/10"
+                                style={{
+                                  width: `${style.layout.bottomLeftWidth * 0.75}%`,
+                                  padding: style.layout.bottomLeftPadding / 4,
+                                  marginLeft: style.layout.bottomOffsetX / 10
+                                }}
+                              />
+                              <div
+                                className="h-6 border border-neutral-700/70 bg-neutral-900/10"
+                                style={{
+                                  width: `${style.layout.bottomRightWidth * 0.75}%`,
+                                  padding: style.layout.bottomRightPadding / 4,
+                                  marginRight: style.layout.bottomOffsetX / 10
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               </div>
@@ -3803,121 +4978,251 @@ export default function Settings() {
         </main>
       </div>
 
-      {showFullPreview && (
-        <div
-          className="fixed inset-0 z-40"
-          style={{ backgroundColor: previewColors.backgroundColor }}
-        >
-          <button
-            onClick={() => setShowFullPreview(false)}
-            className="absolute top-4 right-4 z-50 px-3 py-2 text-sm border border-white/30 text-white/90 hover:bg-white/10"
-          >
-            <X className="w-4 h-4 inline-block mr-1" />
-            {lt(language, {
-              'zh-CN': '关闭仿真预览',
-              'en-US': 'Close Preview',
-              'ja-JP': 'プレビューを閉じる',
-              'ko-KR': '미리보기 닫기'
-            })}
-          </button>
-
-          {style.timePosition !== 'hidden' && style.timePosition !== 'center' && (
-            <div
-              className={`absolute font-mono opacity-70 ${
-                style.timePosition === 'top-left'
-                  ? 'top-8 left-8'
-                  : style.timePosition === 'top-right'
-                    ? 'top-8 right-8'
-                    : style.timePosition === 'bottom-left'
-                      ? 'bottom-20 left-8'
-                      : 'bottom-20 right-8'
-              }`}
-              style={{ color: previewColors.textColor, fontSize: style.fontSizes.timeText }}
-            >
-              {previewTimeText}
+      {cropState && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+          <div className="w-full max-w-4xl max-h-[calc(100vh-3rem)] overflow-y-auto bg-white border border-neutral-300">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-neutral-900">
+                {lt(language, {
+                  'zh-CN': '裁切图片',
+                  'en-US': 'Crop Image',
+                  'ja-JP': '画像をクロップ',
+                  'ko-KR': '이미지 자르기'
+                })}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setCropState(null)}>
+                <X className="w-4 h-4" />
+              </Button>
             </div>
-          )}
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-neutral-600">
+                {lt(language, {
+                  'zh-CN': '可拖拽裁切框移动，拖动四角手柄缩放；下方滑块可做精确微调。',
+                  'en-US': 'Drag to move, drag corner handles to resize, and fine-tune with sliders below.',
+                  'ja-JP': 'ドラッグで移動、四隅ハンドルで拡縮、下のスライダーで微調整できます。',
+                  'ko-KR': '드래그로 이동하고 모서리 핸들로 크기 조절, 아래 슬라이더로 미세 조정하세요.'
+                })}
+              </p>
+              <div className="border border-neutral-200 bg-neutral-50 p-4">
+                <div
+                  ref={cropContainerRef}
+                  className="relative w-full mx-auto border border-neutral-300"
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                  style={{
+                    maxHeight: '50vh',
+                    aspectRatio: `${cropState.naturalWidth} / ${cropState.naturalHeight}`,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <img
+                    src={cropState.source}
+                    alt="crop-source"
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    draggable={false}
+                  />
 
-          <div
-            className="h-full flex flex-col justify-center px-12"
-            style={{ color: previewColors.textColor }}
-          >
-            {style.timePosition === 'center' && (
-              <div
-                className="font-mono mb-5 opacity-70"
-                style={{ fontSize: style.fontSizes.timeText, textAlign: 'center' }}
-              >
-                {previewTimeText}
+                  {cropViewport && cropBoxGeometry && (
+                    <>
+                      <div
+                        className="absolute bg-black/45 pointer-events-none"
+                        style={{
+                          left: cropViewport.left,
+                          top: cropViewport.top,
+                          width: cropViewport.width,
+                          height: Math.max(0, cropBoxGeometry.top - cropViewport.top)
+                        }}
+                      />
+                      <div
+                        className="absolute bg-black/45 pointer-events-none"
+                        style={{
+                          left: cropViewport.left,
+                          top: cropBoxGeometry.top,
+                          width: Math.max(0, cropBoxGeometry.left - cropViewport.left),
+                          height: cropBoxGeometry.height
+                        }}
+                      />
+                      <div
+                        className="absolute bg-black/45 pointer-events-none"
+                        style={{
+                          left: cropBoxGeometry.left + cropBoxGeometry.width,
+                          top: cropBoxGeometry.top,
+                          width: Math.max(
+                            0,
+                            cropViewport.left + cropViewport.width -
+                              (cropBoxGeometry.left + cropBoxGeometry.width)
+                          ),
+                          height: cropBoxGeometry.height
+                        }}
+                      />
+                      <div
+                        className="absolute bg-black/45 pointer-events-none"
+                        style={{
+                          left: cropViewport.left,
+                          top: cropBoxGeometry.top + cropBoxGeometry.height,
+                          width: cropViewport.width,
+                          height: Math.max(
+                            0,
+                            cropViewport.top + cropViewport.height -
+                              (cropBoxGeometry.top + cropBoxGeometry.height)
+                          )
+                        }}
+                      />
+
+                      <div
+                        className={`absolute z-10 border-2 border-white ${cropInteraction?.type === 'move' ? 'cursor-grabbing' : 'cursor-grab'}`}
+                        onMouseDown={startMoveCrop}
+                        style={{
+                          left: cropBoxGeometry.left,
+                          top: cropBoxGeometry.top,
+                          width: cropBoxGeometry.width,
+                          height: cropBoxGeometry.height
+                        }}
+                      >
+                        <div
+                          className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-white border border-neutral-900 cursor-nwse-resize"
+                          onMouseDown={(e) => startResizeCrop(e, 'nw')}
+                        />
+                        <div
+                          className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-white border border-neutral-900 cursor-nesw-resize"
+                          onMouseDown={(e) => startResizeCrop(e, 'ne')}
+                        />
+                        <div
+                          className="absolute -left-1.5 -bottom-1.5 w-3 h-3 bg-white border border-neutral-900 cursor-nesw-resize"
+                          onMouseDown={(e) => startResizeCrop(e, 'sw')}
+                        />
+                        <div
+                          className="absolute -right-1.5 -bottom-1.5 w-3 h-3 bg-white border border-neutral-900 cursor-nwse-resize"
+                          onMouseDown={(e) => startResizeCrop(e, 'se')}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            )}
-            <div
-              className="whitespace-pre-line"
-              style={{
-                fontSize: style.fontSizes.centerText,
-                textAlign: style.textAligns.centerText,
-                fontWeight: style.fontWeights.centerText
-              }}
-            >
-              {style.centerText ||
-                lt(language, {
-                  'zh-CN': '主标题',
-                  'en-US': 'Main Title',
-                  'ja-JP': 'メイン見出し',
-                  'ko-KR': '메인 제목'
-                })}
-            </div>
-            <div
-              className="opacity-85 whitespace-pre-line mt-3"
-              style={{
-                fontSize: style.fontSizes.subText,
-                textAlign: style.textAligns.subText,
-                fontWeight: style.fontWeights.subText
-              }}
-            >
-              {style.subText ||
-                lt(language, {
-                  'zh-CN': '副标题',
-                  'en-US': 'Subtitle',
-                  'ja-JP': 'サブタイトル',
-                  'ko-KR': '부제목'
-                })}
-            </div>
-          </div>
 
-          <div
-            className="absolute bottom-8 left-8 right-8 grid grid-cols-2 gap-4 opacity-80"
-            style={{ color: previewColors.textColor, fontSize: style.fontSizes.bottomText }}
-          >
-            <span
-              className="whitespace-pre-line"
-              style={{
-                textAlign: style.textAligns.bottomText,
-                fontWeight: style.fontWeights.bottomText
-              }}
-            >
-              {style.bottomLeftText ||
-                lt(language, {
-                  'zh-CN': '左下角文字',
-                  'en-US': 'Bottom Left Text',
-                  'ja-JP': '左下テキスト',
-                  'ko-KR': '좌하단 텍스트'
-                })}
-            </span>
-            <span
-              className="whitespace-pre-line text-right"
-              style={{
-                textAlign: style.textAligns.bottomText,
-                fontWeight: style.fontWeights.bottomText
-              }}
-            >
-              {style.bottomRightText ||
-                lt(language, {
-                  'zh-CN': '右下角文字',
-                  'en-US': 'Bottom Right Text',
-                  'ja-JP': '右下テキスト',
-                  'ko-KR': '우하단 텍스트'
-                })}
-            </span>
+              <div className="grid grid-cols-2 gap-5">
+                <Slider
+                  label={lt(language, {
+                    'zh-CN': '裁切起点 X',
+                    'en-US': 'Crop X',
+                    'ja-JP': 'クロップ開始 X',
+                    'ko-KR': '자르기 시작 X'
+                  })}
+                  value={Math.round(cropState.x)}
+                  min={0}
+                  max={Math.max(0, 100 - cropState.width)}
+                  onChange={(v) =>
+                    setCropState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            ...clampCropRect({
+                              x: v,
+                              y: prev.y,
+                              width: prev.width,
+                              height: prev.height
+                            })
+                          }
+                        : prev
+                    )
+                  }
+                />
+                <Slider
+                  label={lt(language, {
+                    'zh-CN': '裁切起点 Y',
+                    'en-US': 'Crop Y',
+                    'ja-JP': 'クロップ開始 Y',
+                    'ko-KR': '자르기 시작 Y'
+                  })}
+                  value={Math.round(cropState.y)}
+                  min={0}
+                  max={Math.max(0, 100 - cropState.height)}
+                  onChange={(v) =>
+                    setCropState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            ...clampCropRect({
+                              x: prev.x,
+                              y: v,
+                              width: prev.width,
+                              height: prev.height
+                            })
+                          }
+                        : prev
+                    )
+                  }
+                />
+                <Slider
+                  label={lt(language, {
+                    'zh-CN': '裁切宽度',
+                    'en-US': 'Crop Width',
+                    'ja-JP': 'クロップ幅',
+                    'ko-KR': '자르기 너비'
+                  })}
+                  value={Math.round(cropState.width)}
+                  min={1}
+                  max={Math.max(1, 100 - cropState.x)}
+                  onChange={(v) =>
+                    setCropState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            ...clampCropRect({
+                              x: prev.x,
+                              y: prev.y,
+                              width: v,
+                              height: prev.height
+                            })
+                          }
+                        : prev
+                    )
+                  }
+                />
+                <Slider
+                  label={lt(language, {
+                    'zh-CN': '裁切高度',
+                    'en-US': 'Crop Height',
+                    'ja-JP': 'クロップ高さ',
+                    'ko-KR': '자르기 높이'
+                  })}
+                  value={Math.round(cropState.height)}
+                  min={1}
+                  max={Math.max(1, 100 - cropState.y)}
+                  onChange={(v) =>
+                    setCropState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            ...clampCropRect({
+                              x: prev.x,
+                              y: prev.y,
+                              width: prev.width,
+                              height: v
+                            })
+                          }
+                        : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setCropState(null)}>
+                  {t(language, 'common.cancel')}
+                </Button>
+                <Button onClick={() => void applyCrop()}>
+                  {lt(language, {
+                    'zh-CN': '应用裁切',
+                    'en-US': 'Apply Crop',
+                    'ja-JP': 'クロップを適用',
+                    'ko-KR': '자르기 적용'
+                  })}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
