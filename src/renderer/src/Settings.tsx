@@ -962,15 +962,22 @@ function TimeSlotEditor({
 function PasswordSection({
   password,
   onChange,
+  onPasswordPersisted,
   language
 }: {
   password: PasswordConfig
   onChange: (p: PasswordConfig) => void
+  onPasswordPersisted?: (p: PasswordConfig) => void
   language: AppLanguage
 }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showChangeForm, setShowChangeForm] = useState(false)
+  const [fixedEditStep, setFixedEditStep] = useState<'idle' | 'auth' | 'edit'>('idle')
+  const [fixedEditAuthInput, setFixedEditAuthInput] = useState('')
+  const [isVerifyingFixedEdit, setIsVerifyingFixedEdit] = useState(false)
+  const [isSavingFixedEdit, setIsSavingFixedEdit] = useState(false)
+  const [fixedEditError, setFixedEditError] = useState('')
+  const [fixedEditSuccess, setFixedEditSuccess] = useState(false)
   const [showTotpSecret, setShowTotpSecret] = useState(false)
   const [isDeviceConfirmed, setIsDeviceConfirmed] = useState(false)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
@@ -1079,38 +1086,150 @@ function PasswordSection({
     }
   }
 
-  const handleSave = () => {
-    if (!/^\d{6}$/.test(newPassword)) {
-      setError(
+  const onlyDigits = /^\d*$/.test(newPassword)
+  const isSixDigits = /^\d{6}$/.test(newPassword)
+  const newPasswordError =
+    !newPassword
+      ? ''
+      : !onlyDigits
+        ? lt(language, {
+            'zh-CN': '只能输入数字',
+            'en-US': 'Digits only',
+            'ja-JP': '数字のみ入力できます',
+            'ko-KR': '숫자만 입력할 수 있습니다'
+          })
+        : newPassword.length !== 6
+          ? lt(language, {
+              'zh-CN': `需为 6 位数字（当前 ${newPassword.length} 位）`,
+              'en-US': `Must be 6 digits (currently ${newPassword.length})`,
+              'ja-JP': `6桁の数字が必要です（現在 ${newPassword.length} 桁）`,
+              'ko-KR': `6자리 숫자여야 합니다(현재 ${newPassword.length}자리)`
+            })
+          : ''
+
+  const confirmPasswordError =
+    !confirmPassword
+      ? ''
+      : confirmPassword !== newPassword
+        ? lt(language, {
+            'zh-CN': '两次输入不一致',
+            'en-US': 'The two entries do not match',
+            'ja-JP': '2回の入力が一致しません',
+            'ko-KR': '두 번 입력한 값이 일치하지 않습니다'
+          })
+        : ''
+
+  const canSaveFixedPassword =
+    fixedEditStep === 'edit' && isSixDigits && confirmPassword === newPassword && !isSavingFixedEdit
+
+  const handleSaveFixedPassword = async () => {
+    if (!canSaveFixedPassword) return
+
+    try {
+      setIsSavingFixedEdit(true)
+      setFixedEditError('')
+      const nextPassword = { ...password, fixedPassword: newPassword }
+      const ok = await window.api.saveConfig({ password: nextPassword })
+      if (!ok) {
+        setFixedEditError(
+          lt(language, {
+            'zh-CN': '保存失败，请重试',
+            'en-US': 'Save failed, please try again',
+            'ja-JP': '保存に失敗しました。再試行してください',
+            'ko-KR': '저장에 실패했습니다. 다시 시도하세요'
+          })
+        )
+        return
+      }
+
+      onChange(nextPassword)
+      onPasswordPersisted?.(nextPassword)
+
+      setFixedEditSuccess(true)
+      setTimeout(() => {
+        setFixedEditSuccess(false)
+        setFixedEditStep('idle')
+        setFixedEditAuthInput('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setFixedEditError('')
+      }, 1200)
+    } catch (e) {
+      console.error('Save fixed password failed:', e)
+      setFixedEditError(
         lt(language, {
-          'zh-CN': '密码必须为6位数字',
-          'en-US': 'Password must be 6 digits',
-          'ja-JP': 'パスワードは6桁の数字である必要があります',
-          'ko-KR': '비밀번호는 6자리 숫자여야 합니다'
+          'zh-CN': '保存失败，请重试',
+          'en-US': 'Save failed, please try again',
+          'ja-JP': '保存に失敗しました。再試行してください',
+          'ko-KR': '저장에 실패했습니다. 다시 시도하세요'
         })
       )
-      return
+    } finally {
+      setIsSavingFixedEdit(false)
     }
-    if (newPassword !== confirmPassword) {
-      setError(
+  }
+
+  const resetFixedEdit = () => {
+    setFixedEditStep('idle')
+    setFixedEditAuthInput('')
+    setIsVerifyingFixedEdit(false)
+    setIsSavingFixedEdit(false)
+    setFixedEditError('')
+    setFixedEditSuccess(false)
+    setNewPassword('')
+    setConfirmPassword('')
+  }
+
+  const startFixedEdit = () => {
+    setFixedEditError('')
+    setFixedEditSuccess(false)
+    setFixedEditAuthInput('')
+    setFixedEditStep('auth')
+  }
+
+  const verifyFixedEdit = async () => {
+    const input = fixedEditAuthInput.trim()
+    if (!input) {
+      setFixedEditError(
         lt(language, {
-          'zh-CN': '两次输入不一致',
-          'en-US': 'The two entries do not match',
-          'ja-JP': '2回の入力が一致しません',
-          'ko-KR': '두 번 입력한 값이 일치하지 않습니다'
+          'zh-CN': '请输入当前解锁凭据进行验证',
+          'en-US': 'Please enter current unlock credentials for verification',
+          'ja-JP': '認証のため現在の解除認証情報を入力してください',
+          'ko-KR': '검증을 위해 현재 잠금 해제 인증을 입력하세요'
         })
       )
       return
     }
 
-    onChange({ ...password, fixedPassword: newPassword })
-    setSuccess(true)
-    setTimeout(() => {
-      setSuccess(false)
-      setShowChangeForm(false)
-      setNewPassword('')
-      setConfirmPassword('')
-    }, 1500)
+    try {
+      setIsVerifyingFixedEdit(true)
+      setFixedEditError('')
+      const ok = await window.api.verifySettingsPassword(input)
+      if (!ok) {
+        setFixedEditError(
+          lt(language, {
+            'zh-CN': '验证失败：凭据不正确',
+            'en-US': 'Verification failed: incorrect credentials',
+            'ja-JP': '認証に失敗しました: 認証情報が正しくありません',
+            'ko-KR': '검증 실패: 인증 정보가 올바르지 않습니다'
+          })
+        )
+        return
+      }
+      setFixedEditStep('edit')
+    } catch (e) {
+      console.error('Verify settings password failed:', e)
+      setFixedEditError(
+        lt(language, {
+          'zh-CN': '验证失败，请重试',
+          'en-US': 'Verification failed, please try again',
+          'ja-JP': '認証に失敗しました。再試行してください',
+          'ko-KR': '검증에 실패했습니다. 다시 시도하세요'
+        })
+      )
+    } finally {
+      setIsVerifyingFixedEdit(false)
+    }
   }
 
   return (
@@ -1206,11 +1325,18 @@ function PasswordSection({
             </div>
           </div>
           <Button
-            variant={showChangeForm ? 'secondary' : 'primary'}
+            variant={fixedEditStep === 'idle' ? 'primary' : 'secondary'}
             size="sm"
-            onClick={() => setShowChangeForm(!showChangeForm)}
+            onClick={() => {
+              if (fixedEditStep === 'idle') {
+                startFixedEdit()
+              } else {
+                resetFixedEdit()
+              }
+            }}
+            disabled={isVerifyingFixedEdit || isSavingFixedEdit}
           >
-            {showChangeForm
+            {fixedEditStep !== 'idle'
               ? lt(language, {
                   'zh-CN': '取消',
                   'en-US': 'Cancel',
@@ -1225,6 +1351,161 @@ function PasswordSection({
                 })}
           </Button>
         </div>
+
+        {fixedEditStep === 'auth' && (
+          <div className="mt-4 pt-4 border-t border-neutral-200">
+            <div className="flex items-start gap-2 text-xs text-neutral-600 mb-3">
+              <Shield className="w-4 h-4 mt-0.5 text-neutral-500" />
+              <p className="leading-5">
+                {lt(language, {
+                  'zh-CN':
+                    '修改固定密码前需要验证身份。请输入当前解锁凭据（固定密码或 TOTP，遵循全局配置）。',
+                  'en-US':
+                    'Verification is required before changing the fixed PIN. Enter current unlock credentials (Fixed PIN or TOTP, based on global config).',
+                  'ja-JP':
+                    '固定PINを変更する前に認証が必要です。現在の解除認証（固定PINまたはTOTP、グローバル設定に準拠）を入力してください。',
+                  'ko-KR':
+                    '고정 PIN 변경 전에 인증이 필요합니다. 현재 잠금 해제 인증(고정 PIN 또는 TOTP, 전역 설정 기준)을 입력하세요.'
+                })}
+              </p>
+            </div>
+            <div className="space-y-3 max-w-md">
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1.5">
+                  {lt(language, {
+                    'zh-CN': '当前解锁凭据',
+                    'en-US': 'Current Unlock Credential',
+                    'ja-JP': '現在の解除認証',
+                    'ko-KR': '현재 잠금 해제 인증'
+                  })}
+                </label>
+                <Input
+                  type="password"
+                  value={fixedEditAuthInput}
+                  onChange={(v) => {
+                    setFixedEditAuthInput(v)
+                    if (fixedEditError) setFixedEditError('')
+                  }}
+                  placeholder={lt(language, {
+                    'zh-CN': '输入固定密码或 TOTP',
+                    'en-US': 'Enter Fixed PIN or TOTP',
+                    'ja-JP': '固定PINまたはTOTPを入力',
+                    'ko-KR': '고정 PIN 또는 TOTP 입력'
+                  })}
+                  disabled={isVerifyingFixedEdit}
+                />
+              </div>
+              {fixedEditError && <p className="text-sm text-red-600">{fixedEditError}</p>}
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => void verifyFixedEdit()}
+                  disabled={!fixedEditAuthInput.trim() || isVerifyingFixedEdit}
+                >
+                  {isVerifyingFixedEdit
+                    ? lt(language, {
+                        'zh-CN': '验证中...',
+                        'en-US': 'Verifying...',
+                        'ja-JP': '認証中...',
+                        'ko-KR': '검증 중...'
+                      })
+                    : lt(language, {
+                        'zh-CN': '验证',
+                        'en-US': 'Verify',
+                        'ja-JP': '認証',
+                        'ko-KR': '검증'
+                      })}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {fixedEditStep === 'edit' && (
+          <div className="mt-4 pt-4 border-t border-neutral-200">
+            <div className="space-y-4 max-w-md">
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1.5">
+                  {lt(language, {
+                    'zh-CN': '新密码',
+                    'en-US': 'New PIN',
+                    'ja-JP': '新しいPIN',
+                    'ko-KR': '새 PIN'
+                  })}
+                </label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(v) => {
+                    setNewPassword(v)
+                    if (fixedEditError) setFixedEditError('')
+                  }}
+                  placeholder={lt(language, {
+                    'zh-CN': '输入6位数字',
+                    'en-US': 'Enter 6 digits',
+                    'ja-JP': '6桁を入力',
+                    'ko-KR': '6자리 입력'
+                  })}
+                />
+                {newPasswordError && (
+                  <p className="mt-1 text-xs text-red-600">{newPasswordError}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1.5">
+                  {lt(language, {
+                    'zh-CN': '确认密码',
+                    'en-US': 'Confirm PIN',
+                    'ja-JP': 'PINを確認',
+                    'ko-KR': 'PIN 확인'
+                  })}
+                </label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(v) => {
+                    setConfirmPassword(v)
+                    if (fixedEditError) setFixedEditError('')
+                  }}
+                  placeholder={lt(language, {
+                    'zh-CN': '再次输入',
+                    'en-US': 'Enter again',
+                    'ja-JP': 'もう一度入力',
+                    'ko-KR': '다시 입력'
+                  })}
+                />
+                {confirmPasswordError && (
+                  <p className="mt-1 text-xs text-red-600">{confirmPasswordError}</p>
+                )}
+              </div>
+              {fixedEditError && <p className="text-sm text-red-600">{fixedEditError}</p>}
+              {fixedEditSuccess && (
+                <p className="text-sm text-green-600">
+                  {lt(language, {
+                    'zh-CN': '修改成功',
+                    'en-US': 'Updated',
+                    'ja-JP': '変更しました',
+                    'ko-KR': '변경되었습니다'
+                  })}
+                </p>
+              )}
+              <Button onClick={() => void handleSaveFixedPassword()} disabled={!canSaveFixedPassword}>
+                {isSavingFixedEdit
+                  ? lt(language, {
+                      'zh-CN': '保存中...',
+                      'en-US': 'Saving...',
+                      'ja-JP': '保存中...',
+                      'ko-KR': '저장 중...'
+                    })
+                  : lt(language, {
+                      'zh-CN': '保存并应用',
+                      'en-US': 'Save & Apply',
+                      'ja-JP': '保存して適用',
+                      'ko-KR': '저장 및 적용'
+                    })}
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card
@@ -1450,85 +1731,18 @@ function PasswordSection({
         </div>
       </Card>
 
-      {showChangeForm && (
-        <Card
-          title={lt(language, {
-            'zh-CN': '设置新密码',
-            'en-US': 'Set New PIN',
-            'ja-JP': '新しいPINを設定',
-            'ko-KR': '새 PIN 설정'
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+      )}
+      {!error && success && (
+        <div className="p-3 bg-green-50 border border-green-200 text-sm text-green-700">
+          {lt(language, {
+            'zh-CN': '操作成功',
+            'en-US': 'Success',
+            'ja-JP': '成功しました',
+            'ko-KR': '성공했습니다'
           })}
-          subtitle={lt(language, {
-            'zh-CN': '请输入6位数字密码',
-            'en-US': 'Please enter a 6-digit PIN',
-            'ja-JP': '6桁の数字PINを入力してください',
-            'ko-KR': '6자리 숫자 PIN을 입력하세요'
-          })}
-        >
-          <div className="space-y-4 max-w-md">
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1.5">
-                {lt(language, {
-                  'zh-CN': '新密码',
-                  'en-US': 'New PIN',
-                  'ja-JP': '新しいPIN',
-                  'ko-KR': '새 PIN'
-                })}
-              </label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={setNewPassword}
-                placeholder={lt(language, {
-                  'zh-CN': '输入6位数字',
-                  'en-US': 'Enter 6 digits',
-                  'ja-JP': '6桁を入力',
-                  'ko-KR': '6자리 입력'
-                })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1.5">
-                {lt(language, {
-                  'zh-CN': '确认密码',
-                  'en-US': 'Confirm PIN',
-                  'ja-JP': 'PINを確認',
-                  'ko-KR': 'PIN 확인'
-                })}
-              </label>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                placeholder={lt(language, {
-                  'zh-CN': '再次输入',
-                  'en-US': 'Enter again',
-                  'ja-JP': 'もう一度入力',
-                  'ko-KR': '다시 입력'
-                })}
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            {success && (
-              <p className="text-sm text-green-600">
-                {lt(language, {
-                  'zh-CN': '修改成功',
-                  'en-US': 'Updated',
-                  'ja-JP': '変更しました',
-                  'ko-KR': '변경되었습니다'
-                })}
-              </p>
-            )}
-            <Button onClick={handleSave} disabled={!newPassword || !confirmPassword}>
-              {lt(language, {
-                'zh-CN': '保存密码',
-                'en-US': 'Save PIN',
-                'ja-JP': 'PINを保存',
-                'ko-KR': 'PIN 저장'
-              })}
-            </Button>
-          </div>
-        </Card>
+        </div>
       )}
     </div>
   )
@@ -2694,6 +2908,16 @@ export default function Settings() {
     setUpdate(clone(savedState.update))
   }
 
+  const handlePasswordPersisted = (nextPassword: PasswordConfig) => {
+    setSavedState((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        password: clone(nextPassword)
+      }
+    })
+  }
+
   const handleCheckForUpdates = async () => {
     setIsCheckingUpdate(true)
     try {
@@ -3312,7 +3536,12 @@ export default function Settings() {
                     {t(language, 'settings.section.password.desc')}
                   </p>
                 </div>
-                <PasswordSection password={password} onChange={setPassword} language={language} />
+                <PasswordSection
+                  password={password}
+                  onChange={setPassword}
+                  onPasswordPersisted={handlePasswordPersisted}
+                  language={language}
+                />
               </div>
             )}
 
