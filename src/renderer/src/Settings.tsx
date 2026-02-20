@@ -875,7 +875,10 @@ function Slider({
     <div className="space-y-2">
       <div className="flex justify-between text-xs text-neutral-600">
         <span>{label}</span>
-        <span className="font-mono">{value}{unit}</span>
+        <span className="font-mono">
+          {value}
+          {unit}
+        </span>
       </div>
       <div className="flex items-center gap-3">
         <input
@@ -2435,16 +2438,13 @@ export default function Settings() {
     width: number
     height: number
   } | null>(null)
-  const [cropInteraction, setCropInteraction] = useState<
-    | {
-        type: 'move' | 'resize'
-        handle?: 'nw' | 'ne' | 'sw' | 'se'
-        startX: number
-        startY: number
-        rect: { x: number; y: number; width: number; height: number }
-      }
-    | null
-  >(null)
+  const [cropInteraction, setCropInteraction] = useState<{
+    type: 'move' | 'resize'
+    handle?: 'nw' | 'ne' | 'sw' | 'se'
+    startX: number
+    startY: number
+    rect: { x: number; y: number; width: number; height: number }
+  } | null>(null)
 
   const clampCropRect = (rect: {
     x: number
@@ -3402,7 +3402,8 @@ export default function Settings() {
                             textOpacities: {
                               centerText: s.textOpacities?.centerText ?? s.textOpacity,
                               subText: s.textOpacities?.subText ?? s.textOpacity,
-                              bottomLeftText: getDefaultStyleConfig().textOpacities?.bottomLeftText || 100,
+                              bottomLeftText:
+                                getDefaultStyleConfig().textOpacities?.bottomLeftText || 100,
                               bottomRightText: s.textOpacities?.bottomRightText ?? s.textOpacity
                             }
                           }))
@@ -3451,7 +3452,8 @@ export default function Settings() {
                               centerText: s.textOpacities?.centerText ?? s.textOpacity,
                               subText: s.textOpacities?.subText ?? s.textOpacity,
                               bottomLeftText: s.textOpacities?.bottomLeftText ?? s.textOpacity,
-                              bottomRightText: getDefaultStyleConfig().textOpacities?.bottomRightText || 100
+                              bottomRightText:
+                                getDefaultStyleConfig().textOpacities?.bottomRightText || 100
                             }
                           }))
                         }
@@ -4007,7 +4009,8 @@ export default function Settings() {
                                 bottomLeftText: getDefaultStyleConfig().bottomLeftText,
                                 bottomLeftImage: getDefaultStyleConfig().bottomLeftImage,
                                 imageScales: {
-                                  bottomLeft: getDefaultStyleConfig().imageScales?.bottomLeft || 100,
+                                  bottomLeft:
+                                    getDefaultStyleConfig().imageScales?.bottomLeft || 100,
                                   bottomRight: s.imageScales?.bottomRight || 100
                                 }
                               }))
@@ -4087,7 +4090,8 @@ export default function Settings() {
                                   size="sm"
                                   variant="secondary"
                                   onClick={() =>
-                                    style.bottomLeftImage && void openCropper('left', style.bottomLeftImage)
+                                    style.bottomLeftImage &&
+                                    void openCropper('left', style.bottomLeftImage)
                                   }
                                   disabled={!style.bottomLeftImage}
                                 >
@@ -4167,7 +4171,8 @@ export default function Settings() {
                                 bottomRightImage: getDefaultStyleConfig().bottomRightImage,
                                 imageScales: {
                                   bottomLeft: s.imageScales?.bottomLeft || 100,
-                                  bottomRight: getDefaultStyleConfig().imageScales?.bottomRight || 100
+                                  bottomRight:
+                                    getDefaultStyleConfig().imageScales?.bottomRight || 100
                                 }
                               }))
                             }
@@ -4404,7 +4409,10 @@ export default function Settings() {
                         'ko-KR': 'Lock It 미리보기'
                       })}
                     </div>
-                    <div className="aspect-video relative" style={{ backgroundColor: previewColors.backgroundColor }}>
+                    <div
+                      className="aspect-video relative"
+                      style={{ backgroundColor: previewColors.backgroundColor }}
+                    >
                       <LockScreenView
                         style={style}
                         currentTime={previewNow}
@@ -4521,7 +4529,10 @@ export default function Settings() {
                             min={10}
                             max={90}
                             onChange={(v) =>
-                              setStyle((s) => ({ ...s, layout: { ...s.layout, bottomLeftWidth: v } }))
+                              setStyle((s) => ({
+                                ...s,
+                                layout: { ...s.layout, bottomLeftWidth: v }
+                              }))
                             }
                           />
                           <Slider
@@ -4998,9 +5009,11 @@ export default function Settings() {
               <p className="text-xs text-neutral-600">
                 {lt(language, {
                   'zh-CN': '可拖拽裁切框移动，拖动四角手柄缩放；下方滑块可做精确微调。',
-                  'en-US': 'Drag to move, drag corner handles to resize, and fine-tune with sliders below.',
+                  'en-US':
+                    'Drag to move, drag corner handles to resize, and fine-tune with sliders below.',
                   'ja-JP': 'ドラッグで移動、四隅ハンドルで拡縮、下のスライダーで微調整できます。',
-                  'ko-KR': '드래그로 이동하고 모서리 핸들로 크기 조절, 아래 슬라이더로 미세 조정하세요.'
+                  'ko-KR':
+                    '드래그로 이동하고 모서리 핸들로 크기 조절, 아래 슬라이더로 미세 조정하세요.'
                 })}
               </p>
               <div className="border border-neutral-200 bg-neutral-50 p-4">
@@ -5050,7 +5063,8 @@ export default function Settings() {
                           top: cropBoxGeometry.top,
                           width: Math.max(
                             0,
-                            cropViewport.left + cropViewport.width -
+                            cropViewport.left +
+                              cropViewport.width -
                               (cropBoxGeometry.left + cropBoxGeometry.width)
                           ),
                           height: cropBoxGeometry.height
@@ -5064,7 +5078,8 @@ export default function Settings() {
                           width: cropViewport.width,
                           height: Math.max(
                             0,
-                            cropViewport.top + cropViewport.height -
+                            cropViewport.top +
+                              cropViewport.height -
                               (cropBoxGeometry.top + cropBoxGeometry.height)
                           )
                         }}

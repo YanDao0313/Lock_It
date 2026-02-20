@@ -129,7 +129,9 @@ export default function LockScreenView({
   const centerOpacity = style.textOpacities
     ? clampOpacity(style.textOpacities.centerText)
     : fallbackOpacity
-  const subOpacity = style.textOpacities ? clampOpacity(style.textOpacities.subText) : fallbackOpacity
+  const subOpacity = style.textOpacities
+    ? clampOpacity(style.textOpacities.subText)
+    : fallbackOpacity
   const bottomLeftOpacity = style.textOpacities
     ? clampOpacity(style.textOpacities.bottomLeftText)
     : fallbackOpacity
@@ -196,7 +198,10 @@ export default function LockScreenView({
   const rightCorner = renderCornerContent('right')
 
   return (
-    <div className={`relative w-full h-full ${className}`} style={{ backgroundColor, color: textColor }}>
+    <div
+      className={`relative w-full h-full ${className}`}
+      style={{ backgroundColor, color: textColor }}
+    >
       {style.timePosition !== 'hidden' && style.timePosition !== 'center' && (
         <div
           className={`absolute font-mono ${

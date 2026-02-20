@@ -36,7 +36,8 @@ export default function PreviewScreen() {
   }
 
   const { style, mode } = payload
-  const backgroundColor = mode === 'light' ? style.lightBackgroundColor || '#fafafa' : style.backgroundColor
+  const backgroundColor =
+    mode === 'light' ? style.lightBackgroundColor || '#fafafa' : style.backgroundColor
   const textColor = mode === 'light' ? style.lightTextColor || '#171717' : style.textColor
 
   return (

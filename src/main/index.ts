@@ -310,7 +310,11 @@ function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
     ...defaults,
     ...source,
     textOpacity: globalOpacity,
-    textOpacities: normalizeTextOpacities(source.textOpacities, globalOpacity, defaults.textOpacities),
+    textOpacities: normalizeTextOpacities(
+      source.textOpacities,
+      globalOpacity,
+      defaults.textOpacities
+    ),
     imageScales: normalizeImageScales(source.imageScales, defaults.imageScales),
     bottomLeftMode: source.bottomLeftMode === 'image' ? 'image' : 'text',
     bottomRightMode: source.bottomRightMode === 'image' ? 'image' : 'text',
@@ -322,9 +326,13 @@ function normalizeStyle(style?: Partial<StyleConfig>): StyleConfig {
       ...defaults.textAligns,
       ...(source.textAligns || {}),
       bottomLeftText:
-        source.textAligns?.bottomLeftText || source.textAligns?.bottomText || defaults.textAligns.bottomLeftText,
+        source.textAligns?.bottomLeftText ||
+        source.textAligns?.bottomText ||
+        defaults.textAligns.bottomLeftText,
       bottomRightText:
-        source.textAligns?.bottomRightText || source.textAligns?.bottomText || defaults.textAligns.bottomRightText
+        source.textAligns?.bottomRightText ||
+        source.textAligns?.bottomText ||
+        defaults.textAligns.bottomRightText
     },
     fontWeights: {
       ...defaults.fontWeights,
@@ -350,7 +358,10 @@ function normalizeTextOpacities(
   return {
     centerText: normalizeTextOpacity(value?.centerText, fallbackGlobal ?? defaults.centerText),
     subText: normalizeTextOpacity(value?.subText, fallbackGlobal ?? defaults.subText),
-    bottomLeftText: normalizeTextOpacity(value?.bottomLeftText, fallbackGlobal ?? defaults.bottomLeftText),
+    bottomLeftText: normalizeTextOpacity(
+      value?.bottomLeftText,
+      fallbackGlobal ?? defaults.bottomLeftText
+    ),
     bottomRightText: normalizeTextOpacity(
       value?.bottomRightText,
       fallbackGlobal ?? defaults.bottomRightText

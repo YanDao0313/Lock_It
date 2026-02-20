@@ -663,7 +663,10 @@ export default function LockScreen() {
                 </div>
                 <h3
                   className="text-lg mb-4 whitespace-pre-line"
-                  style={{ color: style.textColor, textAlign: style.textAligns?.centerText || 'center' }}
+                  style={{
+                    color: style.textColor,
+                    textAlign: style.textAligns?.centerText || 'center'
+                  }}
                 >
                   {style.closeScreenPrompt}
                 </h3>
