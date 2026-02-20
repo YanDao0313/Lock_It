@@ -93,10 +93,16 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            targetArgs: --win nsis
+            artifactSuffix: win-x64
+            targetArgs: --win nsis --x64
+          - os: windows-latest
+            artifactSuffix: win-arm64
+            targetArgs: --win nsis --arm64
           - os: macos-latest
-            targetArgs: --mac zip
+            artifactSuffix: mac-universal
+            targetArgs: --mac zip --universal
           - os: ubuntu-latest
+            artifactSuffix: linux
             targetArgs: --linux AppImage deb
 
     runs-on: ${{ matrix.os }}
@@ -139,7 +145,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: preview-${{ matrix.os }}
+          name: preview-${{ matrix.artifactSuffix }}
           if-no-files-found: error
           path: |
             dist/*.exe

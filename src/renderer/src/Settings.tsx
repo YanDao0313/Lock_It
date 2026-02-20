@@ -1160,7 +1160,7 @@ function PasswordSection({
         <div className="mt-3 p-3 bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 leading-5">
           {lt(language, {
             'zh-CN':
-              '安全提示：退出软件与卸载程序都需要输入当前解锁凭据（固定密码或 TOTP，遵循全局配置）。Windows 任务管理器“结束任务”属于系统级强制终止，无法 100% 完全拦截，本软件会尽力自动拉起恢复。',
+              '安全提示：退出软件与卸载程序都需要输入当前解锁凭据（固定密码或 TOTP，遵循全局配置）。',
             'en-US':
               'Security notice: Exiting the app and uninstalling both require current unlock credentials (Fixed PIN or TOTP, based on global config). Windows Task Manager force-kill is an OS-level action and cannot be blocked 100%; the app will try to auto-recover.',
             'ja-JP':
