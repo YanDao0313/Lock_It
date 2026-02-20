@@ -1157,6 +1157,18 @@ function PasswordSection({
             })}
           </Button>
         </div>
+        <div className="mt-3 p-3 bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 leading-5">
+          {lt(language, {
+            'zh-CN':
+              '安全提示：退出软件与卸载程序都需要输入当前解锁凭据（固定密码或 TOTP，遵循全局配置）。Windows 任务管理器“结束任务”属于系统级强制终止，无法 100% 完全拦截，本软件会尽力自动拉起恢复。',
+            'en-US':
+              'Security notice: Exiting the app and uninstalling both require current unlock credentials (Fixed PIN or TOTP, based on global config). Windows Task Manager force-kill is an OS-level action and cannot be blocked 100%; the app will try to auto-recover.',
+            'ja-JP':
+              'セキュリティ通知: アプリ終了とアンインストールはいずれも現在の解除認証（固定PINまたはTOTP、グローバル設定に準拠）が必要です。Windowsタスクマネージャーの強制終了はOSレベル操作のため100%遮断はできませんが、本アプリは自動復帰を試みます。',
+            'ko-KR':
+              '보안 안내: 앱 종료와 제거는 모두 현재 잠금 해제 인증(고정 PIN 또는 TOTP, 전역 설정 기준)이 필요합니다. Windows 작업 관리자 강제 종료는 OS 수준 동작이라 100% 차단할 수 없으며, 앱은 자동 복구를 시도합니다.'
+          })}
+        </div>
       </Card>
 
       <Card>
@@ -2393,6 +2405,10 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [savedState, setSavedState] = useState<SavedSettingsState | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  const [quitAuthRequestId, setQuitAuthRequestId] = useState<string | null>(null)
+  const [quitAuthInput, setQuitAuthInput] = useState('')
+  const [quitAuthError, setQuitAuthError] = useState('')
+  const [isVerifyingQuitAuth, setIsVerifyingQuitAuth] = useState(false)
 
   const [password, setPassword] = useState<PasswordConfig>({
     type: 'fixed',
@@ -2634,6 +2650,15 @@ export default function Settings() {
     })
   }, [])
 
+  useEffect(() => {
+    window.api.onQuitAuthRequest((payload) => {
+      setQuitAuthRequestId(payload.requestId)
+      setQuitAuthInput('')
+      setQuitAuthError('')
+      setIsVerifyingQuitAuth(false)
+    })
+  }, [])
+
   const handleSave = async (): Promise<boolean> => {
     setIsLoading(true)
     try {
@@ -2734,6 +2759,66 @@ export default function Settings() {
       await window.api.respondSettingsClose('cancel')
     }
     setPendingAction(null)
+  }
+
+  const handleVerifyQuitAuth = async () => {
+    if (!quitAuthRequestId) return
+    const value = quitAuthInput.trim()
+    if (!value) {
+      setQuitAuthError(
+        lt(language, {
+          'zh-CN': '请输入当前密码或 TOTP',
+          'en-US': 'Please enter current PIN or TOTP',
+          'ja-JP': '現在のPINまたはTOTPを入力してください',
+          'ko-KR': '현재 PIN 또는 TOTP를 입력하세요'
+        })
+      )
+      return
+    }
+
+    setIsVerifyingQuitAuth(true)
+    setQuitAuthError('')
+    try {
+      const ok = await window.api.verifyQuitPassword({
+        requestId: quitAuthRequestId,
+        password: value
+      })
+      if (!ok) {
+        setQuitAuthError(
+          lt(language, {
+            'zh-CN': '验证失败，请重试',
+            'en-US': 'Verification failed, please retry',
+            'ja-JP': '認証に失敗しました。再試行してください',
+            'ko-KR': '인증에 실패했습니다. 다시 시도하세요'
+          })
+        )
+      }
+    } catch (error) {
+      setQuitAuthError(
+        lt(language, {
+          'zh-CN': '验证失败，请重试',
+          'en-US': 'Verification failed, please retry',
+          'ja-JP': '認証に失敗しました。再試行してください',
+          'ko-KR': '인증에 실패했습니다. 다시 시도하세요'
+        })
+      )
+    } finally {
+      setIsVerifyingQuitAuth(false)
+    }
+  }
+
+  const handleCancelQuitAuth = async () => {
+    if (!quitAuthRequestId) return
+    try {
+      await window.api.cancelQuitPasswordAuth(quitAuthRequestId)
+    } catch (error) {
+      console.error('Cancel quit auth failed:', error)
+    } finally {
+      setQuitAuthRequestId(null)
+      setQuitAuthInput('')
+      setQuitAuthError('')
+      setIsVerifyingQuitAuth(false)
+    }
   }
 
   const applyTheme = (theme: (typeof presetThemes)[0]) => {
@@ -5334,6 +5419,83 @@ export default function Settings() {
               >
                 {t(language, 'settings.unsaved.back')}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quitAuthRequestId && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+          <div className="w-[440px] max-w-[calc(100vw-2rem)] bg-white border border-neutral-200">
+            <div className="px-6 py-4 border-b border-neutral-200">
+              <h3 className="text-sm font-medium text-neutral-900">
+                {lt(language, {
+                  'zh-CN': '退出前验证密码',
+                  'en-US': 'Verify Password Before Exit',
+                  'ja-JP': '終了前にパスワード確認',
+                  'ko-KR': '종료 전 비밀번호 확인'
+                })}
+              </h3>
+              <p className="text-xs text-neutral-500 mt-1">
+                {lt(language, {
+                  'zh-CN': '请输入当前解锁密码（固定密码或 TOTP）以继续退出',
+                  'en-US': 'Enter current unlock password (Fixed PIN or TOTP) to continue exit',
+                  'ja-JP':
+                    '終了を続行するには、現在の解除パスワード（固定PINまたはTOTP）を入力してください',
+                  'ko-KR': '종료를 계속하려면 현재 잠금 해제 비밀번호(PIN 또는 TOTP)를 입력하세요'
+                })}
+              </p>
+            </div>
+            <div className="p-6 space-y-3">
+              <Input
+                type="password"
+                value={quitAuthInput}
+                onChange={(value) => {
+                  setQuitAuthInput(value)
+                  setQuitAuthError('')
+                }}
+                placeholder={lt(language, {
+                  'zh-CN': '输入固定密码或 TOTP',
+                  'en-US': 'Enter Fixed PIN or TOTP',
+                  'ja-JP': '固定PINまたはTOTPを入力',
+                  'ko-KR': '고정 PIN 또는 TOTP 입력'
+                })}
+              />
+              {quitAuthError && <p className="text-xs text-red-600">{quitAuthError}</p>}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleCancelQuitAuth()}
+                  disabled={isVerifyingQuitAuth}
+                >
+                  {lt(language, {
+                    'zh-CN': '取消',
+                    'en-US': 'Cancel',
+                    'ja-JP': 'キャンセル',
+                    'ko-KR': '취소'
+                  })}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleVerifyQuitAuth()}
+                  disabled={isVerifyingQuitAuth}
+                >
+                  {isVerifyingQuitAuth
+                    ? lt(language, {
+                        'zh-CN': '验证中...',
+                        'en-US': 'Verifying...',
+                        'ja-JP': '確認中...',
+                        'ko-KR': '검증 중...'
+                      })
+                    : lt(language, {
+                        'zh-CN': '验证并退出',
+                        'en-US': 'Verify and Exit',
+                        'ja-JP': '確認して終了',
+                        'ko-KR': '검증 후 종료'
+                      })}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

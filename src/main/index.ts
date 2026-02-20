@@ -185,6 +185,14 @@ let settingsDirty = false
 let isHandlingMainClose = false
 let pendingSettingsCloseResolver: ((result: 'proceed' | 'cancel') => void) | null = null
 let updateCheckTimer: NodeJS.Timeout | null = null
+let isQuitAuthorized = false
+let isHandlingQuitAttempt = false
+let pendingQuitAuthResolver: ((result: boolean) => void) | null = null
+let pendingQuitAuthRequestId: string | null = null
+let watchdogStarted = false
+
+const uninstallAuthModeArg = '--request-uninstall-auth'
+const uninstallVerifyArgPrefix = '--verify-password-for-uninstall='
 
 let previewStyleState: {
   style: StyleConfig
@@ -415,6 +423,16 @@ function normalizeLanguage(language?: string): AppLanguage {
   if (normalized === 'ko' || normalized === 'ko-kr') return 'ko-KR'
   if (normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-hans') return 'zh-CN'
   return 'zh-CN'
+}
+
+function getArgValue(prefix: string): string | undefined {
+  const matched = process.argv.find((arg) => arg.startsWith(prefix))
+  if (!matched) return undefined
+  return matched.slice(prefix.length)
+}
+
+function hasArg(flag: string): boolean {
+  return process.argv.includes(flag)
 }
 
 type TrayI18n = {
@@ -686,6 +704,344 @@ function generateDefaultTotpDeviceName(): string {
 function normalizeTotpDeviceName(name?: string): string {
   const trimmed = (name || '').trim()
   return trimmed || generateDefaultTotpDeviceName()
+}
+
+function getExitAuthorizationFlagPath(): string {
+  return join(app.getPath('userData'), 'authorized-exit.flag')
+}
+
+async function markAuthorizedExit(): Promise<void> {
+  try {
+    const fs = await import('fs')
+    fs.writeFileSync(getExitAuthorizationFlagPath(), String(Date.now()), 'utf-8')
+  } catch (error) {
+    console.error('Failed to mark authorized exit:', error)
+  }
+}
+
+async function clearAuthorizedExitFlag(): Promise<void> {
+  try {
+    const fs = await import('fs')
+    const flagPath = getExitAuthorizationFlagPath()
+    if (fs.existsSync(flagPath)) {
+      fs.unlinkSync(flagPath)
+    }
+  } catch (error) {
+    console.error('Failed to clear authorized exit flag:', error)
+  }
+}
+
+async function startWindowsWatchdog(): Promise<void> {
+  if (watchdogStarted) return
+  if (process.platform !== 'win32') return
+  if (!app.isPackaged) return
+
+  const executablePath = app.getPath('exe')
+  const currentPid = process.pid
+  const flagPath = getExitAuthorizationFlagPath().replace(/'/g, "''")
+  const escapedExecutablePath = executablePath.replace(/'/g, "''")
+
+  const script = [
+    `$parentPid=${currentPid}`,
+    `$exe='${escapedExecutablePath}'`,
+    `$flag='${flagPath}'`,
+    'while($true){',
+    '  Start-Sleep -Seconds 2',
+    '  $p = Get-Process -Id $parentPid -ErrorAction SilentlyContinue',
+    '  if($p){ continue }',
+    '  if(Test-Path $flag){',
+    '    Remove-Item -Path $flag -Force -ErrorAction SilentlyContinue',
+    '    exit 0',
+    '  }',
+    '  Start-Sleep -Seconds 1',
+    '  Start-Process -FilePath $exe',
+    '  exit 0',
+    '}'
+  ].join('; ')
+
+  try {
+    const { spawn } = await import('child_process')
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', script],
+      {
+        detached: true,
+        stdio: 'ignore'
+      }
+    )
+    child.unref()
+    watchdogStarted = true
+  } catch (error) {
+    console.error('Failed to start watchdog:', error)
+  }
+}
+
+function sendQuitAuthRequest(requestId: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+
+  const send = () => {
+    mainWindow?.webContents.send('quit-auth-request', { requestId })
+  }
+
+  if (mainWindow.webContents.isLoadingMainFrame()) {
+    mainWindow.webContents.once('did-finish-load', send)
+    return
+  }
+
+  send()
+}
+
+function requestQuitAuthorization(): Promise<boolean> {
+  if (pendingQuitAuthResolver) {
+    return Promise.resolve(false)
+  }
+
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  pendingQuitAuthRequestId = requestId
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow()
+  } else {
+    navigateMainWindowTo('settings')
+  }
+
+  mainWindow?.show()
+  mainWindow?.focus()
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      if (pendingQuitAuthResolver) {
+        pendingQuitAuthResolver = null
+      }
+      pendingQuitAuthRequestId = null
+      resolve(false)
+    }, 60000)
+
+    pendingQuitAuthResolver = (result) => {
+      clearTimeout(timeout)
+      pendingQuitAuthResolver = null
+      pendingQuitAuthRequestId = null
+      resolve(result)
+    }
+
+    sendQuitAuthRequest(requestId)
+  })
+}
+
+function finishQuitAuth(result: boolean): void {
+  if (pendingQuitAuthResolver) {
+    pendingQuitAuthResolver(result)
+  }
+}
+
+async function initiateQuitFlow(): Promise<void> {
+  if (isQuitting || isQuitAuthorized) {
+    return
+  }
+
+  if (isHandlingQuitAttempt) {
+    return
+  }
+
+  isHandlingQuitAttempt = true
+  try {
+    const authorized = await requestQuitAuthorization()
+    if (!authorized) return
+
+    isQuitAuthorized = true
+    isQuitting = true
+    await markAuthorizedExit()
+    app.quit()
+  } finally {
+    isHandlingQuitAttempt = false
+  }
+}
+
+async function runUninstallAuthWindow(): Promise<boolean> {
+  if (!totpModule || !store) {
+    await initModules()
+  }
+
+  return await new Promise((resolve) => {
+    const verifyChannel = 'verify-uninstall-auth-password'
+    const completeChannel = 'complete-uninstall-auth'
+    let settled = false
+
+    const cleanup = () => {
+      ipcMain.removeHandler(verifyChannel)
+      ipcMain.removeHandler(completeChannel)
+    }
+
+    ipcMain.handle(verifyChannel, (_, password: string) => {
+      const result = verifyPasswordAgainstConfig(password)
+      return result.success
+    })
+
+    ipcMain.handle(completeChannel, async (_, ok: boolean) => {
+      if (settled) return true
+      settled = true
+      cleanup()
+      if (ok) {
+        await markAuthorizedExit()
+      }
+      resolve(Boolean(ok))
+      if (authWindow && !authWindow.isDestroyed()) {
+        authWindow.close()
+      }
+      return true
+    })
+
+    const authWindow = new BrowserWindow({
+      width: 460,
+      height: 300,
+      resizable: false,
+      maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      autoHideMenuBar: true,
+      show: false,
+      title: 'Lock It - 卸载验证',
+      icon: join(__dirname, '../../resources/icon.png'),
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        sandbox: false
+      }
+    })
+
+    const html = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lock It 卸载验证</title>
+    <style>
+      body { margin: 0; font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #171717; }
+      .wrap { padding: 24px; }
+      .card { background: #fff; border: 1px solid #e5e5e5; padding: 20px; }
+      h1 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+      p { margin: 0 0 14px; font-size: 13px; color: #525252; line-height: 1.5; }
+      input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d4d4d4; font-size: 14px; outline: none; }
+      input:focus { border-color: #171717; }
+      .error { min-height: 18px; color: #dc2626; font-size: 12px; margin-top: 8px; }
+      .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+      button { min-width: 88px; padding: 8px 12px; border: 1px solid #d4d4d4; background: #fff; cursor: pointer; font-size: 13px; }
+      .primary { background: #171717; color: #fff; border-color: #171717; }
+      button:disabled { opacity: .6; cursor: not-allowed; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>卸载前请验证密码</h1>
+        <p>请输入当前解锁密码（固定密码或 TOTP）后，才可继续卸载。</p>
+        <input id="pwd" type="password" placeholder="输入固定密码或 TOTP" autofocus />
+        <div id="error" class="error"></div>
+        <div class="actions">
+          <button id="cancel">取消</button>
+          <button id="ok" class="primary">验证并继续</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron')
+      const pwd = document.getElementById('pwd')
+      const error = document.getElementById('error')
+      const ok = document.getElementById('ok')
+      const cancel = document.getElementById('cancel')
+
+      const resetError = () => { error.textContent = '' }
+      const setBusy = (busy) => {
+        ok.disabled = busy
+        cancel.disabled = busy
+        pwd.disabled = busy
+      }
+
+      pwd.addEventListener('input', resetError)
+      pwd.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          ok.click()
+        }
+      })
+
+      cancel.addEventListener('click', async () => {
+        await ipcRenderer.invoke('${completeChannel}', false)
+      })
+
+      ok.addEventListener('click', async () => {
+        const value = String(pwd.value || '').trim()
+        if (!value) {
+          error.textContent = '请输入密码或 TOTP。'
+          return
+        }
+        setBusy(true)
+        try {
+          const pass = await ipcRenderer.invoke('${verifyChannel}', value)
+          if (!pass) {
+            error.textContent = '验证失败，请重试。'
+            setBusy(false)
+            return
+          }
+          await ipcRenderer.invoke('${completeChannel}', true)
+        } catch (e) {
+          error.textContent = '验证失败，请重试。'
+          setBusy(false)
+        }
+      })
+    </script>
+  </body>
+</html>`
+
+    authWindow.on('closed', () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(false)
+    })
+
+    authWindow.once('ready-to-show', () => {
+      authWindow.show()
+      authWindow.focus()
+    })
+
+    void authWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`)
+  })
+}
+
+async function runMaintenanceModeIfNeeded(): Promise<boolean> {
+  const uninstallAuthMode = hasArg(uninstallAuthModeArg)
+  const uninstallVerifyPassword = getArgValue(uninstallVerifyArgPrefix)
+
+  if (!uninstallAuthMode && uninstallVerifyPassword === undefined) {
+    return false
+  }
+
+  try {
+    await app.whenReady()
+    await initModules()
+
+    let ok = false
+    if (uninstallVerifyPassword !== undefined) {
+      const token = String(uninstallVerifyPassword).trim()
+      if (!/^\d{6,8}$/.test(token)) {
+        ok = false
+      } else {
+        ok = verifyPasswordAgainstConfig(token).success
+      }
+      if (ok) {
+        await markAuthorizedExit()
+      }
+    } else {
+      ok = await runUninstallAuthWindow()
+    }
+
+    app.exit(ok ? 0 : 1)
+  } catch (error) {
+    console.error('Maintenance mode failed:', error)
+    app.exit(1)
+  }
+
+  return true
 }
 
 function navigateMainWindowTo(pageHash: 'setup' | 'settings'): void {
@@ -1082,8 +1438,7 @@ function updateTrayMenu(): void {
     {
       label: trayI18n.quit,
       click: () => {
-        isQuitting = true
-        app.quit()
+        void initiateQuitFlow()
       }
     }
   ] as any)
@@ -1267,6 +1622,29 @@ function setupIpcHandlers(): void {
     return true
   })
 
+  ipcMain.handle(
+    'verify-quit-password',
+    async (_, payload: { requestId: string; password: string }): Promise<boolean> => {
+      if (!payload || payload.requestId !== pendingQuitAuthRequestId) {
+        return false
+      }
+
+      const result = verifyPasswordAgainstConfig(payload.password)
+      if (result.success) {
+        finishQuitAuth(true)
+      }
+
+      return result.success
+    }
+  )
+
+  ipcMain.handle('cancel-quit-password-auth', (_, requestId: string): boolean => {
+    if (requestId && requestId === pendingQuitAuthRequestId) {
+      finishQuitAuth(false)
+    }
+    return true
+  })
+
   // 获取配置
   ipcMain.handle('get-config', () => {
     const style = normalizeStyle(store.get('style') as Partial<StyleConfig>)
@@ -1367,6 +1745,9 @@ function setupIpcHandlers(): void {
   ipcMain.handle('install-downloaded-update', () => {
     if (is.dev) return false
     if (updaterState.status !== 'downloaded') return false
+    isQuitAuthorized = true
+    isQuitting = true
+    void markAuthorizedExit()
     autoUpdater.quitAndInstall()
     return true
   })
@@ -1680,64 +2061,82 @@ function setupIpcHandlers(): void {
 // ============================================================================
 // 应用生命周期
 // ============================================================================
-app
-  .whenReady()
-  .then(async () => {
-    await initModules()
+void (async () => {
+  const handledByMaintenanceMode = await runMaintenanceModeIfNeeded()
+  if (handledByMaintenanceMode) {
+    return
+  }
 
-    app.setName('Lock It')
-    electronApp.setAppUserModelId('com.electron.lockit')
-
-    app.on('browser-window-created', (_, window) => {
-      optimizer.watchWindowShortcuts(window)
-      if (!is.dev) {
-        registerProductionShortcutGuards(window)
-      }
-    })
-
-    setupIpcHandlers()
-    syncStartupSettingFromConfig()
-    setupAutoUpdater()
-    createTray()
-
-    const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
-
-    if (hasCompletedSetup) {
-      // 已完成设置，直接后台运行
-      startScheduleChecker()
-    } else {
-      // 首次启动，显示设置向导
-      createMainWindow()
-    }
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow()
-      }
-    })
-  })
-  .catch((error) => {
-    console.error('Application bootstrap failed:', error)
+  // 单实例锁
+  const gotTheLock = app.requestSingleInstanceLock()
+  if (!gotTheLock) {
     app.quit()
-  })
+    return
+  }
 
-app.on('window-all-closed', () => {
-  // 保持后台运行，不退出
-})
-
-app.on('before-quit', () => {
-  isQuitting = true
-})
-
-// 单实例锁
-const gotTheLock = app.requestSingleInstanceLock()
-if (!gotTheLock) {
-  app.quit()
-} else {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
     }
   })
-}
+
+  app
+    .whenReady()
+    .then(async () => {
+      await initModules()
+      await clearAuthorizedExitFlag()
+
+      app.setName('Lock It')
+      electronApp.setAppUserModelId('com.electron.lockit')
+
+      app.on('browser-window-created', (_, window) => {
+        optimizer.watchWindowShortcuts(window)
+        if (!is.dev) {
+          registerProductionShortcutGuards(window)
+        }
+      })
+
+      setupIpcHandlers()
+      syncStartupSettingFromConfig()
+      setupAutoUpdater()
+      createTray()
+      await startWindowsWatchdog()
+
+      const hasCompletedSetup = store.get('hasCompletedSetup') as boolean
+
+      if (hasCompletedSetup) {
+        // 已完成设置，直接后台运行
+        startScheduleChecker()
+      } else {
+        // 首次启动，显示设置向导
+        createMainWindow()
+      }
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createMainWindow()
+        }
+      })
+    })
+    .catch((error) => {
+      console.error('Application bootstrap failed:', error)
+      isQuitAuthorized = true
+      isQuitting = true
+      app.quit()
+    })
+
+  app.on('window-all-closed', () => {
+    // 保持后台运行，不退出
+  })
+
+  app.on('before-quit', (event) => {
+    if (isQuitAuthorized) {
+      isQuitting = true
+      return
+    }
+
+    event.preventDefault()
+    void initiateQuitFlow()
+  })
+})()

@@ -246,6 +246,10 @@ export interface API {
   // 设置窗口关闭结果
   respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
 
+  verifyQuitPassword: (payload: { requestId: string; password: string }) => Promise<boolean>
+  cancelQuitPasswordAuth: (requestId: string) => Promise<boolean>
+  onQuitAuthRequest: (callback: (payload: { requestId: string }) => void) => void
+
   checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
   getUpdateStatus: () => Promise<UpdateStatus>
   installDownloadedUpdate: () => Promise<boolean>
@@ -327,6 +331,14 @@ contextBridge.exposeInMainWorld('api', {
   // 设置窗口关闭结果
   respondSettingsClose: (result: 'proceed' | 'cancel') =>
     ipcRenderer.invoke('settings-close-response', result),
+
+  verifyQuitPassword: (payload: { requestId: string; password: string }) =>
+    ipcRenderer.invoke('verify-quit-password', payload),
+  cancelQuitPasswordAuth: (requestId: string) =>
+    ipcRenderer.invoke('cancel-quit-password-auth', requestId),
+  onQuitAuthRequest: (callback: (payload: { requestId: string }) => void) => {
+    ipcRenderer.on('quit-auth-request', (_, payload) => callback(payload))
+  },
 
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),

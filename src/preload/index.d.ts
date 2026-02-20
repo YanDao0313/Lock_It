@@ -191,6 +191,9 @@ export interface API {
   setSettingsDirty: (dirty: boolean) => Promise<boolean>
   onSettingsCloseAttempt: (callback: () => void) => void
   respondSettingsClose: (result: 'proceed' | 'cancel') => Promise<boolean>
+  verifyQuitPassword: (payload: { requestId: string; password: string }) => Promise<boolean>
+  cancelQuitPasswordAuth: (requestId: string) => Promise<boolean>
+  onQuitAuthRequest: (callback: (payload: { requestId: string }) => void) => void
   checkForUpdates: () => Promise<{ ok: boolean; status: string; message: string; version?: string }>
   getUpdateStatus: () => Promise<UpdateStatus>
   installDownloadedUpdate: () => Promise<boolean>

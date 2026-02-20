@@ -536,6 +536,20 @@ export default function Setup() {
               {!passwordError && hasValidPassword && (
                 <p className="text-xs text-green-600 mt-3">{t(language, 'setup.password.done')}</p>
               )}
+              <div className="mt-4 p-3 bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 leading-5">
+                {(() => {
+                  if (language === 'en-US') {
+                    return 'Security notice: Exiting the app and uninstalling both require current unlock credentials (Fixed PIN or TOTP, based on global config). Windows Task Manager force-kill is an OS-level action and cannot be blocked 100%; the app will try to auto-recover.'
+                  }
+                  if (language === 'ja-JP') {
+                    return 'セキュリティ通知: アプリ終了とアンインストールはいずれも現在の解除認証（固定PINまたはTOTP、グローバル設定に準拠）が必要です。Windowsタスクマネージャーの強制終了はOSレベル操作のため100%遮断はできませんが、本アプリは自動復帰を試みます。'
+                  }
+                  if (language === 'ko-KR') {
+                    return '보안 안내: 앱 종료와 제거는 모두 현재 잠금 해제 인증(고정 PIN 또는 TOTP, 전역 설정 기준)이 필요합니다. Windows 작업 관리자 강제 종료는 OS 수준 동작이라 100% 차단할 수 없으며, 앱은 자동 복구를 시도합니다.'
+                  }
+                  return '安全提示：退出软件与卸载程序都需要输入当前解锁凭据（固定密码或 TOTP，遵循全局配置）。Windows 任务管理器“结束任务”属于系统级强制终止，无法 100% 完全拦截，本软件会尽力自动拉起恢复。'
+                })()}
+              </div>
             </Card>
           )}
 
