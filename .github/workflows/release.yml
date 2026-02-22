@@ -169,6 +169,41 @@ jobs:
           yarn build
           yarn electron-builder ${{ matrix.targetArgs }} --publish never
 
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const crypto = require('crypto')
+
+          const distDir = path.join(process.cwd(), 'dist')
+          if (!fs.existsSync(distDir)) {
+            console.error('dist/ not found')
+            process.exit(1)
+          }
+
+          const exts = new Set(['.exe', '.zip', '.AppImage', '.deb', '.blockmap', '.yml', '.yaml'])
+          const files = fs
+            .readdirSync(distDir)
+            .filter((name) => exts.has(path.extname(name)))
+            .sort((a, b) => a.localeCompare(b))
+
+          const lines = []
+          for (const name of files) {
+            const fullPath = path.join(distDir, name)
+            const buf = fs.readFileSync(fullPath)
+            const hash = crypto.createHash('sha256').update(buf).digest('hex')
+            lines.push(`${hash}  ${name}`)
+          }
+
+          const outName = `SHA256SUMS-${process.env.ARTIFACT_SUFFIX || 'dist'}.txt`
+          fs.writeFileSync(path.join(distDir, outName), `${lines.join('\n')}\n`)
+          console.log(`Wrote dist/${outName} (${lines.length} entries)`) 
+          NODE
+        env:
+          ARTIFACT_SUFFIX: ${{ matrix.artifactSuffix }}
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -182,6 +217,7 @@ jobs:
             dist/*.blockmap
             dist/*.yml
             dist/*.yaml
+            dist/SHA256SUMS-*.txt
 
   update-release-notes:
     needs: [prepare-release, publish-release]

@@ -1,5 +1,10 @@
 !include "LogicLib.nsh"
 
+; electron-builder 通常会在编译后对安装包执行 Authenticode 签名。
+; 在部分环境下这会触发 NSIS 自带的 CRC 完整性校验失败（弹出“Installer integrity check has failed”）。
+; 这里关闭 CRCCheck，完整性改由代码签名/分发渠道保障。
+CRCCheck off
+
 !macro customUnInit
   ; ====================================================================
   ; 卸载前密码验证
