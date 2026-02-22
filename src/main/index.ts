@@ -211,7 +211,8 @@ function collectDebugInfo(): DebugInfo {
   const cpuModel = cpuInfo?.[0]?.model
 
   const update = normalizeUpdateConfig(store?.get('update') as Partial<UpdateConfig>)
-  const feedReleaseType: 'release' | 'prerelease' = update.channel === 'preview' ? 'prerelease' : 'release'
+  const feedReleaseType: 'release' | 'prerelease' =
+    update.channel === 'preview' ? 'prerelease' : 'release'
 
   let osVersion: string | undefined
   try {
@@ -640,7 +641,11 @@ function applyUpdaterConfigFromStore(): UpdateConfig {
 
 function isPreviewBuildVersion(version: string): boolean {
   const normalized = String(version || '').toLowerCase()
-  return normalized.includes('-preview.') || normalized.includes('-preview-') || normalized.endsWith('-preview')
+  return (
+    normalized.includes('-preview.') ||
+    normalized.includes('-preview-') ||
+    normalized.endsWith('-preview')
+  )
 }
 
 function isDefaultUpdateConfig(config: UpdateConfig): boolean {
