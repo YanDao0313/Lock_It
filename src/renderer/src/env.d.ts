@@ -120,6 +120,43 @@ interface RuntimeInfo {
   isPackaged: boolean
 }
 
+interface DebugInfo {
+  app: {
+    name: string
+    version: string
+    isPackaged: boolean
+    locale: string
+    execPath: string
+    userDataPath: string
+    logsPath: string
+  }
+  update: UpdateConfig & {
+    feedReleaseType: 'release' | 'prerelease'
+    updaterState: UpdateStatus
+  }
+  system: {
+    platform: string
+    arch: string
+    osType: string
+    osRelease: string
+    osVersion?: string
+    hostname: string
+    timezone?: string
+  }
+  hardware: {
+    cpuModel?: string
+    cpuCores: number
+    memoryTotalMB: number
+    memoryFreeMB: number
+  }
+  versions: {
+    node?: string
+    electron?: string
+    chrome?: string
+    v8?: string
+  }
+}
+
 interface UpdateStatus {
   status:
     | 'idle'
@@ -163,6 +200,7 @@ interface API {
     update?: UpdateConfig
   }) => Promise<boolean>
   getRuntimeInfo: () => Promise<RuntimeInfo>
+  getDebugInfo: () => Promise<DebugInfo>
 
   // 样式获取
   getStyle: () => Promise<StyleConfig & { backgroundColor: string; textColor: string }>

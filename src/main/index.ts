@@ -9,6 +9,7 @@ import {
   globalShortcut
 } from 'electron'
 import { join } from 'path'
+import * as os from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { format } from 'date-fns'
 import { autoUpdater } from 'electron-updater'
@@ -166,6 +167,104 @@ type TOTPModule = {
 type PasswordVerifyResult = {
   success: boolean
   method?: 'fixed' | 'totp'
+}
+
+type DebugInfo = {
+  app: {
+    name: string
+    version: string
+    isPackaged: boolean
+    locale: string
+    execPath: string
+    userDataPath: string
+    logsPath: string
+  }
+  update: UpdateConfig & {
+    feedReleaseType: 'release' | 'prerelease'
+    updaterState: typeof updaterState
+  }
+  system: {
+    platform: NodeJS.Platform
+    arch: string
+    osType: string
+    osRelease: string
+    osVersion?: string
+    hostname: string
+    timezone?: string
+  }
+  hardware: {
+    cpuModel?: string
+    cpuCores: number
+    memoryTotalMB: number
+    memoryFreeMB: number
+  }
+  versions: {
+    node?: string
+    electron?: string
+    chrome?: string
+    v8?: string
+  }
+}
+
+function collectDebugInfo(): DebugInfo {
+  const cpuInfo = os.cpus()
+  const cpuModel = cpuInfo?.[0]?.model
+
+  const update = normalizeUpdateConfig(store?.get('update') as Partial<UpdateConfig>)
+  const feedReleaseType: 'release' | 'prerelease' = update.channel === 'preview' ? 'prerelease' : 'release'
+
+  let osVersion: string | undefined
+  try {
+    // Node 20+ 支持 os.version()；部分平台可能不可用
+    osVersion = typeof (os as any).version === 'function' ? (os as any).version() : undefined
+  } catch {
+    osVersion = undefined
+  }
+
+  let timezone: string | undefined
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    timezone = undefined
+  }
+
+  return {
+    app: {
+      name: app.getName(),
+      version: app.getVersion(),
+      isPackaged: app.isPackaged,
+      locale: app.getLocale(),
+      execPath: process.execPath,
+      userDataPath: app.getPath('userData'),
+      logsPath: app.getPath('logs')
+    },
+    update: {
+      ...update,
+      feedReleaseType,
+      updaterState: { ...updaterState }
+    },
+    system: {
+      platform: process.platform,
+      arch: process.arch,
+      osType: os.type(),
+      osRelease: os.release(),
+      osVersion,
+      hostname: os.hostname(),
+      timezone
+    },
+    hardware: {
+      cpuModel,
+      cpuCores: Array.isArray(cpuInfo) ? cpuInfo.length : 0,
+      memoryTotalMB: Math.round(os.totalmem() / 1024 / 1024),
+      memoryFreeMB: Math.round(os.freemem() / 1024 / 1024)
+    },
+    versions: {
+      node: process.versions?.node,
+      electron: process.versions?.electron,
+      chrome: process.versions?.chrome,
+      v8: process.versions?.v8
+    }
+  }
 }
 
 // ============================================================================
@@ -530,10 +629,43 @@ function syncStartupSettingFromConfig(): void {
 function applyUpdaterConfigFromStore(): UpdateConfig {
   const update = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
   store.set('update', update)
+
+  applyUpdaterFeed(update)
+
   autoUpdater.allowPrerelease = update.channel === 'preview'
   autoUpdater.autoDownload = update.autoDownload
   autoUpdater.autoInstallOnAppQuit = update.autoInstallOnQuit
   return update
+}
+
+function isPreviewBuildVersion(version: string): boolean {
+  const normalized = String(version || '').toLowerCase()
+  return normalized.includes('-preview.') || normalized.includes('-preview-') || normalized.endsWith('-preview')
+}
+
+function isDefaultUpdateConfig(config: UpdateConfig): boolean {
+  const defaults = defaultUpdate()
+  return (
+    config.channel === defaults.channel &&
+    config.checkOnStartup === defaults.checkOnStartup &&
+    config.autoDownload === defaults.autoDownload &&
+    config.autoInstallOnQuit === defaults.autoInstallOnQuit
+  )
+}
+
+function applyUpdaterFeed(update: UpdateConfig): void {
+  const releaseType = update.channel === 'preview' ? 'prerelease' : 'release'
+
+  // 说明：electron-builder 打包时会写入 app-update.yml，但 preview 构建与 stable 构建共用同一份
+  // publish 配置（releaseType=release），会导致 preview 通道仍只看正式 Release。
+  // 这里按运行时通道显式覆盖 feed，确保 stable/preview 通道都按预期工作。
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'YanDao0313',
+    repo: 'Lock_It',
+    releaseType,
+    private: false
+  })
 }
 
 async function runUpdateCheck(manual = false): Promise<{
@@ -557,7 +689,9 @@ async function runUpdateCheck(manual = false): Promise<{
     const result = await autoUpdater.checkForUpdates()
     const targetVersion = result?.updateInfo?.version
 
-    if (targetVersion) {
+    const currentVersion = app.getVersion()
+
+    if (targetVersion && targetVersion !== currentVersion) {
       updaterState.status = 'available'
       updaterState.message = `发现新版本 ${targetVersion}`
       updaterState.version = targetVersion
@@ -642,6 +776,29 @@ async function initModules(): Promise<void> {
       update: defaultUpdate()
     }
   })
+
+  // 预览构建：如果用户的更新设置仍是“完全默认值”，则自动把通道切到 preview。
+  // 这主要解决“从 stable 安装覆盖到 preview 时，AppData 配置沿用导致通道仍是 stable”的困惑。
+  try {
+    const appVersion = app.getVersion()
+    if (isPreviewBuildVersion(appVersion)) {
+      const currentUpdate = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
+      if (isDefaultUpdateConfig(currentUpdate) && currentUpdate.channel !== 'preview') {
+        const nextUpdate: UpdateConfig = { ...currentUpdate, channel: 'preview' }
+        store.set('update', nextUpdate)
+      }
+    }
+  } catch (e) {
+    console.warn('[updater] failed to auto adjust channel for preview build:', e)
+  }
+
+  // 初始化 feed（此时 store 里可能已被自动切到 preview）
+  try {
+    const effectiveUpdate = normalizeUpdateConfig(store.get('update') as Partial<UpdateConfig>)
+    applyUpdaterFeed(effectiveUpdate)
+  } catch (e) {
+    console.warn('[updater] failed to apply updater feed:', e)
+  }
 
   const otplib = await import('otplib')
   const moduleAny = otplib as any
@@ -1736,6 +1893,10 @@ function setupIpcHandlers(): void {
       autoLaunchSupported: isAutoLaunchSupported(),
       isPackaged: app.isPackaged
     }
+  })
+
+  ipcMain.handle('get-debug-info', () => {
+    return collectDebugInfo()
   })
 
   ipcMain.handle('check-for-updates', async () => {

@@ -275,6 +275,7 @@ contextBridge.exposeInMainWorld('api', {
   // 配置管理
   getConfig: () => ipcRenderer.invoke('get-config'),
   getRuntimeInfo: () => ipcRenderer.invoke('get-runtime-info'),
+  getDebugInfo: () => ipcRenderer.invoke('get-debug-info'),
 
   // 样式获取
   getStyle: () => ipcRenderer.invoke('get-style'),

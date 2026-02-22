@@ -120,6 +120,43 @@ export interface RuntimeInfo {
   isPackaged: boolean
 }
 
+interface DebugInfo {
+  app: {
+    name: string
+    version: string
+    isPackaged: boolean
+    locale: string
+    execPath: string
+    userDataPath: string
+    logsPath: string
+  }
+  update: UpdateConfig & {
+    feedReleaseType: 'release' | 'prerelease'
+    updaterState: UpdateStatus
+  }
+  system: {
+    platform: string
+    arch: string
+    osType: string
+    osRelease: string
+    osVersion?: string
+    hostname: string
+    timezone?: string
+  }
+  hardware: {
+    cpuModel?: string
+    cpuCores: number
+    memoryTotalMB: number
+    memoryFreeMB: number
+  }
+  versions: {
+    node?: string
+    electron?: string
+    chrome?: string
+    v8?: string
+  }
+}
+
 export interface UpdateStatus {
   status:
     | 'idle'
@@ -206,6 +243,7 @@ export interface API {
   onPreviewStyleUpdated: (
     callback: (payload: { style: StyleConfig; mode: 'dark' | 'light' }) => void
   ) => void
+  getDebugInfo: () => Promise<DebugInfo>
 }
 
 declare global {

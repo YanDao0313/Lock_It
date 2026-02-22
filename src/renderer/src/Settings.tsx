@@ -171,6 +171,43 @@ interface RuntimeInfo {
   isPackaged: boolean
 }
 
+interface DebugInfo {
+  app: {
+    name: string
+    version: string
+    isPackaged: boolean
+    locale: string
+    execPath: string
+    userDataPath: string
+    logsPath: string
+  }
+  update: UpdateConfig & {
+    feedReleaseType: 'release' | 'prerelease'
+    updaterState: UpdateStatus
+  }
+  system: {
+    platform: string
+    arch: string
+    osType: string
+    osRelease: string
+    osVersion?: string
+    hostname: string
+    timezone?: string
+  }
+  hardware: {
+    cpuModel?: string
+    cpuCores: number
+    memoryTotalMB: number
+    memoryFreeMB: number
+  }
+  versions: {
+    node?: string
+    electron?: string
+    chrome?: string
+    v8?: string
+  }
+}
+
 interface UpdateStatus {
   status:
     | 'idle'
@@ -2649,6 +2686,7 @@ export default function Settings() {
     autoInstallOnQuit: true
   })
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     status: 'idle',
     message: '等待检查更新'
@@ -2835,6 +2873,11 @@ export default function Settings() {
     window.api
       .getRuntimeInfo()
       .then((info) => setRuntimeInfo(info))
+      .catch(console.error)
+
+    window.api
+      .getDebugInfo()
+      .then((info) => setDebugInfo(info))
       .catch(console.error)
 
     window.api
@@ -5149,6 +5192,68 @@ export default function Settings() {
                           })}
                       </p>
                     </div>
+
+                    <div>
+                      <p className="text-neutral-500">
+                        {lt(language, {
+                          'zh-CN': '开发者',
+                          'en-US': 'Developer',
+                          'ja-JP': '開発者',
+                          'ko-KR': '개발자'
+                        })}
+                      </p>
+                      <p className="text-neutral-900 mt-1">Kris Yan</p>
+                    </div>
+
+                    <div>
+                      <p className="text-neutral-500">
+                        {lt(language, {
+                          'zh-CN': '开源协议',
+                          'en-US': 'License',
+                          'ja-JP': 'ライセンス',
+                          'ko-KR': '라이선스'
+                        })}
+                      </p>
+                      <p className="text-neutral-900 mt-1">GNU GPLv3</p>
+                    </div>
+
+                    <div>
+                      <p className="text-neutral-500">
+                        {lt(language, {
+                          'zh-CN': '开源地址',
+                          'en-US': 'Source Code',
+                          'ja-JP': 'ソースコード',
+                          'ko-KR': '소스 코드'
+                        })}
+                      </p>
+                      <a
+                        className="text-neutral-900 mt-1 block underline break-all"
+                        href="https://github.com/YanDao0313/Lock_It"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        https://github.com/YanDao0313/Lock_It
+                      </a>
+                    </div>
+
+                    <div>
+                      <p className="text-neutral-500">
+                        {lt(language, {
+                          'zh-CN': '主页',
+                          'en-US': 'Homepage',
+                          'ja-JP': 'ホームページ',
+                          'ko-KR': '홈페이지'
+                        })}
+                      </p>
+                      <a
+                        className="text-neutral-900 mt-1 block underline break-all"
+                        href="https://krisyan.dev/"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        https://krisyan.dev/
+                      </a>
+                    </div>
                   </div>
                 </Card>
 
@@ -5354,6 +5459,95 @@ export default function Settings() {
                       <p>{updateStatus.message}</p>
                     </div>
                   </div>
+                </Card>
+
+                <Card
+                  title={lt(language, {
+                    'zh-CN': '调试信息',
+                    'en-US': 'Debug Info',
+                    'ja-JP': 'デバッグ情報',
+                    'ko-KR': '디버그 정보'
+                  })}
+                  subtitle={lt(language, {
+                    'zh-CN': '用于排查自动更新、环境与硬件相关问题（只读）',
+                    'en-US': 'Read-only info for troubleshooting updates/environment/hardware',
+                    'ja-JP': '更新・環境・ハードウェアのトラブルシューティング用（読み取り専用）',
+                    'ko-KR': '업데이트/환경/하드웨어 문제 진단용(읽기 전용)'
+                  })}
+                >
+                  {!debugInfo ? (
+                    <p className="text-sm text-neutral-500">
+                      {lt(language, {
+                        'zh-CN': '正在加载调试信息…',
+                        'en-US': 'Loading debug info…',
+                        'ja-JP': 'デバッグ情報を読み込み中…',
+                        'ko-KR': '디버그 정보를 불러오는 중…'
+                      })}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-neutral-500">
+                            {lt(language, {
+                              'zh-CN': '系统',
+                              'en-US': 'OS',
+                              'ja-JP': 'OS',
+                              'ko-KR': 'OS'
+                            })}
+                          </p>
+                          <p className="text-neutral-900 mt-1 break-all">
+                            {`${debugInfo.system.osType} ${debugInfo.system.osVersion || ''} (${debugInfo.system.arch})`}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-500">
+                            {lt(language, {
+                              'zh-CN': '更新通道',
+                              'en-US': 'Update Channel',
+                              'ja-JP': '更新チャンネル',
+                              'ko-KR': '업데이트 채널'
+                            })}
+                          </p>
+                          <p className="text-neutral-900 mt-1">
+                            {`${debugInfo.update.channel} (${debugInfo.update.feedReleaseType})`}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-500">
+                            {lt(language, {
+                              'zh-CN': 'CPU',
+                              'en-US': 'CPU',
+                              'ja-JP': 'CPU',
+                              'ko-KR': 'CPU'
+                            })}
+                          </p>
+                          <p className="text-neutral-900 mt-1 break-all">
+                            {debugInfo.hardware.cpuModel
+                              ? `${debugInfo.hardware.cpuModel} × ${debugInfo.hardware.cpuCores}`
+                              : `${debugInfo.hardware.cpuCores}`}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-500">
+                            {lt(language, {
+                              'zh-CN': '内存',
+                              'en-US': 'Memory',
+                              'ja-JP': 'メモリ',
+                              'ko-KR': '메모리'
+                            })}
+                          </p>
+                          <p className="text-neutral-900 mt-1">
+                            {`${debugInfo.hardware.memoryFreeMB}MB / ${debugInfo.hardware.memoryTotalMB}MB`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <pre className="text-xs whitespace-pre-wrap break-all px-3 py-2 bg-neutral-50 border border-neutral-200 text-neutral-700 max-h-80 overflow-auto">
+                        {JSON.stringify(debugInfo, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </Card>
               </div>
             )}
