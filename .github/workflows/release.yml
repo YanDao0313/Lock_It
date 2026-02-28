@@ -110,11 +110,17 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifactSuffix: win
-            targetArgs: --win nsis
+            artifactSuffix: win-x64
+            targetArgs: --win nsis --x64
+          - os: windows-latest
+            artifactSuffix: win-arm64
+            targetArgs: --win nsis --arm64
           - os: macos-latest
-            artifactSuffix: mac
-            targetArgs: --mac zip
+            artifactSuffix: mac-x64
+            targetArgs: --mac zip --x64
+          - os: macos-latest
+            artifactSuffix: mac-arm64
+            targetArgs: --mac zip --arm64
           - os: ubuntu-latest
             artifactSuffix: linux
             targetArgs: --linux AppImage deb
